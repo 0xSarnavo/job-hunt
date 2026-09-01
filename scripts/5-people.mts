@@ -59,16 +59,22 @@ const tier = (t: string) =>
   /head|director|lead|vp|manager/i.test(t) ? "hiring_manager" :
   /recruit|talent/i.test(t) ? "recruiter" : "peer";
 
-// top selected companies (both gates) + funded pitch targets (step 7), no people yet
+// Staffing/aggregator intermediaries — their postings belong to hidden real
+// employers, so people-finding there is wasted effort.
+const AGGREGATORS = new Set(["jobgether", "jobs via dice", "cybercoders", "hays", "randstad", "adecco"]);
+
+// pitch targets first (fewer, higher intent), then top selected job companies
+const seen = new Set<string>();
 const companies = ([
+  ...db.prepare(`
+    SELECT name company, 'GTM / Generalist Marketer (proactive pitch)' title
+    FROM companies WHERE pitch = 1`).all(),
   ...db.prepare(`
     SELECT DISTINCT company, title FROM jobs
     WHERE rejected IS NULL AND match_score >= 50 AND llm_score >= 50
     ORDER BY llm_score DESC`).all(),
-  ...db.prepare(`
-    SELECT name company, 'GTM / Generalist Marketer (proactive pitch)' title
-    FROM companies WHERE pitch = 1`).all(),
 ] as any[])
+  .filter((c) => { const k = c.company.toLowerCase(); if (seen.has(k) || AGGREGATORS.has(k)) return false; seen.add(k); return true; })
   .filter((c) => !(db.prepare("SELECT 1 FROM people WHERE lower(company)=lower(?) LIMIT 1").get(c.company)))
   .filter((c) => !(db.prepare("SELECT 1 FROM lookups WHERE key = ?").get(`crm:people:${c.company.toLowerCase()}`)))
   .slice(0, COMPANIES_PER_RUN);

@@ -66,9 +66,12 @@ Not a code step. A guided interview in a Claude Code session, merging the resume
 1. **Slug guessing** against the big-3 JSON APIs (name variants: lowercase, hyphenated, concatenated). Verify: Greenhouse board root returns `name`; Lever/Ashby hits are confirmed via rung 2 before being trusted. Found 5/13 US companies with zero page fetches.
 2. **Careers-page signature grep** — fetch homepage, extract careers link (cheerio), grep for embed signatures: `greenhouse.io | lever.co | ashbyhq.com | workable.com | smartrecruiters | zohorecruit | keka | darwinbox | mynexthire | freshteam | recruitee | breezy.hr | dover.com | gem.com`. This is how Zoho/MyNextHire were found in the India sample.
 3. **Extended structured adapters**, added lazily as rung 2 discovers them in the wild. Day one: **Workable** (`apply.workable.com/api/v1/widget/accounts/{slug}` — public JSON, verified working) and **SmartRecruiters** (`api.smartrecruiters.com/v1/companies/{id}/postings` — public, returns 200 for junk slugs so check content, never status). India ATSes (Zoho Recruit, Keka, MyNextHire) get read-only page-parse adapters when a target company actually uses one.
-4. **Rendered fallback** — Playwright for SPA careers pages, deferred to step 10's scraping infrastructure. Until then a company that defeats rungs 1–3 is logged `ats=unknown`, which is a *note, not a lead* (PLAN §2B).
+4. **Rendered fallback** — TinyFish Fetch first (free, real browser, 1,000 URLs/day — see
+   Crawl tier below), Firecrawl scrape second (1,000 credits/mo, heavier anti-bot). A company
+   that defeats all four rungs is logged `ats=unknown`, which is a *note, not a lead* (PLAN §2B).
 
-Everything through rung 3 is native fetch + cheerio + regex. No browser until step 10.
+Everything through rung 3 is native fetch + cheerio + regex; rung 4 is an API call, not a
+local browser. Playwright stays out of the resolver entirely.
 
 ## Step 3 — schema + match
 
@@ -95,8 +98,9 @@ Which of these get built first depends on the geography decision — Adzuna/Joob
 
 | Candidate | Free allowance | Verdict |
 |---|---|---|
-| Google Programmable Search JSON API | 100 queries/day | **selected** — `site:linkedin.com/in "{company}" {title}` finds people legitimately |
-| Brave Search API | ~2,000 queries/mo (verify current terms at signup) | **selected** — second rung of a search waterfall, same pattern as email |
+| TinyFish Search | free, 30 req/min · 500/hr | **selected, rung 1** — structured JSON, limits dwarf the alternatives |
+| Google Programmable Search JSON API | 100 queries/day | **selected, rung 2** — `site:linkedin.com/in "{company}" {title}` finds people legitimately |
+| Brave Search API | ~2,000 queries/mo (verify current terms at signup) | **selected, rung 3** — same waterfall pattern as email |
 | GitHub org members API | free | **selected** — best signal for eng leads at small startups; maps to real names via profile pages |
 | Company /team /about pages | free | **selected** — fetch + `claude -p` extraction |
 | Apollo/RocketReach free tiers | credit-gated, API access unclear on free | rejected for now — re-evaluate only if the above under-fills |
@@ -123,9 +127,43 @@ Acceptance polling: **Playwright persistent context** (`user-data-dir` keeps the
 
 **rss-parser** npm over Entrackr / Inc42 / YourStory / TechCrunch feeds. Extraction of `{company, amount, round, date, investors, domain}` is a `claude -p` call validated by zod (PLAN §2B says LLM, not regex — correct). Then straight into the step-2 resolver. Expect the §0 India numbers: most Entrackr companies will land `ats=unknown` → notes, not leads.
 
+## Crawl tier — Firecrawl + TinyFish (verified 1 Sep 2026)
+
+What the two vendors actually provide, checked against their own pricing/docs:
+
+| | TinyFish | Firecrawl |
+|---|---|---|
+| Free fetch | **Fetch: free forever** — 150 URLs/min, 1,000 URLs/day, real browser with JS/SPA rendering, markdown/JSON/HTML out, failed fetches don't count | 1,000 credits/**month**, 1 credit/page scrape or crawl, 2 concurrent; handles proxies/anti-bot; open-source + self-hostable |
+| Free search | **Search: free forever** — 30 req/min, 500/hr, structured JSON | search costs 2 credits per 10 results — don't use |
+| Metered (not used) | Agent $0.016/step, Browser $0.002/min ($8 starter wallet) | paid plans from $16/mo |
+| Extras | CLI, TS SDK, MCP | Map (site URL discovery), Crawl (recursive), Parse |
+
+Division of labor — the fetch ladder, cheapest first, every result cached in `lookups`:
+
+1. **Native fetch** — unlimited, covers everything with server-rendered HTML.
+2. **TinyFish Fetch** — the rendered-fetch workhorse: SPA careers pages (resolver rung 4),
+   India ATS boards (Keka/Zoho Recruit/MyNextHire recurring re-checks), /team pages, YC Work
+   at a Startup public listings. 1,000/day is ~30× Firecrawl's monthly budget, so it takes all
+   recurring work.
+3. **Firecrawl** — anti-bot fallback when TinyFish Fetch gets blocked (Wellfound is the likely
+   customer), plus `map` to find a company's careers URL when the homepage hides it.
+   1,000/mo is plenty for a fallback rung. **One account** — PLAN §5's one-account-per-vendor
+   rule applies; the second account lapses, and the budget math shows it was never needed.
+4. **Playwright** — only for login-walled sources (step 10) and your own LinkedIn session
+   (steps 7/11). Never for anonymous fetching; the APIs above do that for free.
+
+TinyFish Search additionally takes rung 1 of the step-5 people-finder waterfall. TinyFish's
+metered Agent/Browser products and AgentQL are not used — extraction from fetched markdown is
+a `claude -p` job, already free. Not crawled, ever: anything with a JSON API or RSS feed
+(big-3 boards, Workable, SmartRecruiters, Adzuna, Jooble, Remotive, RemoteOK, Arbeitnow, HN
+Algolia, funding feeds), and LinkedIn in any form.
+
 ## Step 10 — scrape sources
 
-**Playwright**, one scraper per source, each behind the same `JobSource` interface. Built last per PLAN §10; §0 confirms India-first coverage leans on these, which is a reason to decide geography *before* sequencing them.
+One scraper per source behind the same `JobSource` interface. Anonymous-access sources
+(Naukri public listings, Wellfound) go through the crawl tier's fetch ladder; **Playwright**
+is reserved for login-walled sources (Instahyre, Cutshort). Built last per PLAN §10 — and per
+the geography decision, only if the remote-global + Adzuna funnel proves thin.
 
 ## Step 11 — mode=auto
 

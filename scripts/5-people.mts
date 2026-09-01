@@ -33,12 +33,23 @@ const twenty = async (method: string, path: string, body?: unknown) => {
   return res.ok ? res.json() : (console.error(`twenty ${path}: ${res.status}`), null);
 };
 
+// TinyFish first (free), Firecrawl on failure (2 credits/10 results — worth it
+// when the free tier is down). Cached forever either way; failures return "".
 function search(q: string): string {
   const key = `tfsearch:${q}`;
   const hit = db.prepare("SELECT result FROM lookups WHERE key = ?").get(key) as any;
   if (hit) return hit.result;
-  const out = execFileSync("tinyfish", ["search", "query", q], { encoding: "utf8", timeout: 60_000 });
-  db.prepare("INSERT OR REPLACE INTO lookups (key, provider, result, cost) VALUES (?, 'tinyfish-search', ?, 0)").run(key, out);
+  let out = "", provider = "tinyfish-search";
+  try {
+    out = execFileSync("tinyfish", ["search", "query", q], { encoding: "utf8", timeout: 60_000 });
+  } catch {
+    try {
+      out = execFileSync("firecrawl", ["search", q, "--limit", "8"], { encoding: "utf8", timeout: 90_000 });
+      provider = "firecrawl";
+    } catch { return ""; }
+  }
+  db.prepare("INSERT OR REPLACE INTO lookups (key, provider, result, cost) VALUES (?, ?, ?, ?)")
+    .run(key, provider, out, provider === "firecrawl" ? 1 : 0);
   return out;
 }
 
@@ -85,6 +96,7 @@ for (const c of companies) {
   const raw =
     search(`site:linkedin.com/in "${c.company}" founder OR CTO OR "developer relations" OR "head of marketing" OR "head of growth"`) +
     "\n" + search(`site:linkedin.com/in "${c.company}" devrel OR "developer advocate" OR "product marketing"`);
+  if (raw.trim().length < 50) { console.log(`  ${c.company}: search unavailable, will retry next run`); continue; }
   let found;
   try {
     found = extract(People,

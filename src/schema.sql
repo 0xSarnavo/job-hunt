@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   location    TEXT,
   posted_at   TEXT,
   source      TEXT,
+  description TEXT,              -- plain text; feeds scoring, drafts, and tailor-cv
   match_score REAL,
   matched_at  TEXT,
   rejected    TEXT               -- reject reason from hard filters, NULL = alive

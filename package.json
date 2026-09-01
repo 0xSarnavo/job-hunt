@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "cli": "tsx src/cli.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",
@@ -13,7 +14,7 @@
     "commander": "^13.1.0",
     "rss-parser": "^3.13.0",
     "yaml": "^2.6.0",
-    "zod": "^3.24.0"
+    "zod": "^4.1.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",

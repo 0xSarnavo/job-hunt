@@ -44,7 +44,7 @@ Tested against two samples before writing any code:
 | Validation | zod · valibot | **zod** | one schema each for `Posting`, `Person`, `profile.yaml`; nothing exotic |
 | YAML | yaml · js-yaml | **yaml** | maintained, round-trips comments |
 | HTML parsing | cheerio · regex | **cheerio** | careers-link extraction needs a DOM; regex stays for ATS signature grep |
-| LLM calls | `claude -p` headless · @anthropic-ai/sdk | **`claude -p --output-format json`** | covered by the existing Claude subscription — zero marginal cost, which is the whole constraint; swap to the SDK only if unattended cron proves flaky |
+| LLM calls | OpenCode Zen free models · `claude -p` · @anthropic-ai/sdk | **two tiers behind `src/llm.ts`**: light = OpenCode free model, heavy = `claude -p` | the model is assumed weak and swappable; correctness lives in the harness — schema-constrained prompts (zod → JSON Schema), validate-and-retry with the validator's error, light→heavy escalation, forever-cache in `lookups` keyed on task+input so model swaps never churn it. Light: extraction (funding items, HN posts, careers pages). Heavy: judgement (hiring-manager inference, drafts). Needs one-time `opencode auth login` |
 | Rate limiting | bottleneck · hand-rolled | **hand-rolled token bucket** (~20 lines) | one dependency saved; per-vendor limits live next to the vendor adapter |
 | Scheduling | launchd · cron | **launchd** plists | native on macOS, survives reboots, per-job logs |
 | HTTP | native fetch · axios · got | **native fetch** | nothing here needs more |

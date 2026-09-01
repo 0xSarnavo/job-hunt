@@ -273,8 +273,9 @@ of §0.
 - **Catch-all domains** defeat verification. At this volume, send regardless and accept the bounce.
 - **Port 25** is blocked on most cloud hosts. Run verification locally.
 - **Scrape sources rot.** Every tier-2 source will break eventually. Budget the maintenance or drop them.
-- **GDPR** applies if targeting the EU or UK. Decide the position before step 9, not after.
-- **Geography also decides resolver coverage** (TOOLING.md §0): remote-global works on the
-  big-3 JSON boards as designed; India-first pushes motion B onto careers scraping and India
-  ATS adapters, and moves the tier-2 scrape sources up the build order.
+- ~~**GDPR**~~ Resolved 1 Sep 2026: geography is remote-global → India remote → BLR →
+  Kolkata (TOOLING.md). EU/UK are not targeted; GDPR is out of scope.
+- **Geography vs resolver coverage** (TOOLING.md §0): the remote-global tier works on the
+  big-3 JSON boards as designed; the India tiers push motion B onto careers scraping and
+  India ATS adapters — accepted, sequenced after the remote-global sources.
 - **LinkedIn account loss** in `--mode=auto`. Which is precisely why it is not the default.

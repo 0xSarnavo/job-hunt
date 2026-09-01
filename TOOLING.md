@@ -133,10 +133,18 @@ Same Playwright persistent context as step 7. Deferred; guardrails as PLAN §6.
 
 ---
 
-## The geography decision (open — decides before step 9)
+## The geography decision (decided 1 Sep 2026)
 
-§0 turned this from a GDPR question into a coverage question:
+Priority order: **remote-global → India remote → Bengaluru → Kolkata.** EU/UK are not
+targeted, so no GDPR position is needed.
 
-- **Remote-global (US-heavy):** the pipeline works as designed — big-3 resolver carries motion B, Remotive/RemoteOK/HN carry motion A, scrape tier stays optional. GDPR position still needed only if EU/UK included.
-- **India-first:** motion B's hiring check becomes rung-2/3/4 work (careers scrape + India ATS adapters), Naukri/Instahyre move up the build order, and the maintenance budget in PLAN §11 gets spent. GDPR moot.
-- **Hybrid (India + remote-global, EU/UK excluded):** both source mixes get built; GDPR drops out entirely. Costs the most sources.
+What this means for the build:
+
+- The remote-global sources (big-3 boards, Remotive, RemoteOK, HN) lead — conveniently the
+  free, low-maintenance ones, and the slice where the §0 numbers say the resolver works.
+- Adzuna (India endpoint) and Jooble carry the India tiers in step 4; Entrackr leads still
+  flow through motion B but most will land `ats=unknown` until the India ATS adapters and
+  scrape tier exist (steps 2 rung 3 / step 10).
+- The priority order is scoring input, not just source selection: `location` scoring in step 3
+  weights remote-global ≥ India-remote > BLR > Kolkata, and it belongs in profile.yaml
+  (step 1) as a ranked list, not a boolean `remote_ok`.

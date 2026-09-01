@@ -59,11 +59,16 @@ const tier = (t: string) =>
   /head|director|lead|vp|manager/i.test(t) ? "hiring_manager" :
   /recruit|talent/i.test(t) ? "recruiter" : "peer";
 
-// top selected companies (both gates) with no people yet
-const companies = (db.prepare(`
-  SELECT DISTINCT company, title FROM jobs
-  WHERE rejected IS NULL AND match_score >= 50 AND llm_score >= 50
-  ORDER BY llm_score DESC`).all() as any[])
+// top selected companies (both gates) + funded pitch targets (step 7), no people yet
+const companies = ([
+  ...db.prepare(`
+    SELECT DISTINCT company, title FROM jobs
+    WHERE rejected IS NULL AND match_score >= 50 AND llm_score >= 50
+    ORDER BY llm_score DESC`).all(),
+  ...db.prepare(`
+    SELECT name company, 'GTM / Generalist Marketer (proactive pitch)' title
+    FROM companies WHERE pitch = 1`).all(),
+] as any[])
   .filter((c) => !(db.prepare("SELECT 1 FROM people WHERE lower(company)=lower(?) LIMIT 1").get(c.company)))
   .filter((c) => !(db.prepare("SELECT 1 FROM lookups WHERE key = ?").get(`crm:people:${c.company.toLowerCase()}`)))
   .slice(0, COMPANIES_PER_RUN);

@@ -39,6 +39,7 @@ const MODEL: Record<string, FieldSpec[]> = {
       opt("SMARTRECRUITERS", "SmartRecruiters", "turquoise", 4), opt("OTHER", "Other", "yellow", 5),
       opt("NONE_FOUND", "None found", "gray", 6)].join(",")}]` },
     { name: "signalSource", label: "Signal Source", type: "TEXT", description: "where we first saw this company (entrackr, hn, remotive, ...)" },
+    { name: "research", label: "Research", type: "TEXT", description: "what they do + what Sarnavo can do for them (step 6 output)" },
   ],
   person: [
     { name: "actor", label: "Actor", type: "TEXT" },
@@ -49,6 +50,11 @@ const MODEL: Record<string, FieldSpec[]> = {
       opt("VALID", "Valid", "green", 0), opt("RISKY", "Risky", "yellow", 1),
       opt("INVALID", "Invalid", "red", 2), opt("UNVERIFIED", "Unverified", "gray", 3)].join(",")}]` },
     { name: "emailProvenance", label: "Email Provenance", type: "TEXT", description: "vendor + confidence, e.g. prospeo:82 verified 2026-09-01" },
+    { name: "linkedinNote", label: "LinkedIn Note", type: "TEXT", description: "drafted connect note, ≤300 chars (LinkedIn's cap)" },
+    { name: "dmDraft", label: "DM Draft", type: "TEXT", description: "≤150-word message for after they accept" },
+    { name: "fetchEmail", label: "Fetch Email", type: "SELECT", options: `[${[
+      opt("NO", "No", "gray", 0), opt("YES", "Yes — fetch", "blue", 1),
+      opt("DONE", "Done", "green", 2), opt("FAILED", "Failed", "red", 3)].join(",")}]` },
   ],
   opportunity: [
     { name: "actor", label: "Actor", type: "TEXT" },

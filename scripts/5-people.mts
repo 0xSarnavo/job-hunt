@@ -1,0 +1,120 @@
+// STEP 5 — company employee finding (run after fetch/score/sync).
+// For each top selected company: find the right humans via TinyFish Search
+// (free), tier them by persona, draft a LinkedIn connect note (≤300 chars —
+// LinkedIn's real cap) + a ≤150-word DM for after acceptance, push to CRM.
+//
+// CREDIT GUARDS (in order): people already in SQLite → skip company;
+// crm:people:<company> marker in lookups → skip; search results cached forever.
+//
+// Knobs:
+const COMPANIES_PER_RUN = 5;
+const MODEL = "opencode/mimo-v2.5-free";
+
+import { execFileSync } from "node:child_process";
+import { z } from "zod";
+import { openDb } from "../src/db.ts";
+import { extract } from "../src/llm.ts";
+import { loadProfile } from "../src/profile.ts";
+
+process.chdir(new URL("..", import.meta.url).pathname);
+try { process.loadEnvFile(".env"); } catch {}
+process.env.LLM_LIGHT = `opencode run -m ${MODEL}`;
+const actor = process.env.JOBHUNT_ACTOR || "cron";
+const db = openDb();
+const profile = loadProfile();
+
+const U = process.env.TWENTY_URL!, K = process.env.TWENTY_API_KEY!;
+const twenty = async (method: string, path: string, body?: unknown) => {
+  await new Promise((r) => setTimeout(r, 700));
+  const res = await fetch(`${U}/rest/${path}`, {
+    method, headers: { Authorization: `Bearer ${K}`, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return res.ok ? res.json() : (console.error(`twenty ${path}: ${res.status}`), null);
+};
+
+function search(q: string): string {
+  const key = `tfsearch:${q}`;
+  const hit = db.prepare("SELECT result FROM lookups WHERE key = ?").get(key) as any;
+  if (hit) return hit.result;
+  const out = execFileSync("tinyfish", ["search", "query", q], { encoding: "utf8", timeout: 60_000 });
+  db.prepare("INSERT OR REPLACE INTO lookups (key, provider, result, cost) VALUES (?, 'tinyfish-search', ?, 0)").run(key, out);
+  return out;
+}
+
+const People = z.object({
+  people: z.array(z.object({
+    name: z.string(),
+    title: z.string(),
+    linkedin_url: z.string(),
+  })).max(6),
+});
+const Msgs = z.object({
+  connect_note: z.string().max(295),
+  dm: z.string().max(1100), // ≈150 words
+});
+
+const tier = (t: string) =>
+  /founder|co-founder|ceo|cto|chief/i.test(t) ? "founder" :
+  /head|director|lead|vp|manager/i.test(t) ? "hiring_manager" :
+  /recruit|talent/i.test(t) ? "recruiter" : "peer";
+
+// top selected companies (both gates) with no people yet
+const companies = (db.prepare(`
+  SELECT DISTINCT company, title FROM jobs
+  WHERE rejected IS NULL AND match_score >= 50 AND llm_score >= 50
+  ORDER BY llm_score DESC`).all() as any[])
+  .filter((c) => !(db.prepare("SELECT 1 FROM people WHERE lower(company)=lower(?) LIMIT 1").get(c.company)))
+  .filter((c) => !(db.prepare("SELECT 1 FROM lookups WHERE key = ?").get(`crm:people:${c.company.toLowerCase()}`)))
+  .slice(0, COMPANIES_PER_RUN);
+
+console.log(`finding people at ${companies.length} companies: ${companies.map((c) => c.company).join(", ")}`);
+
+for (const c of companies) {
+  const raw =
+    search(`site:linkedin.com/in "${c.company}" founder OR CTO OR "developer relations" OR "head of marketing" OR "head of growth"`) +
+    "\n" + search(`site:linkedin.com/in "${c.company}" devrel OR "developer advocate" OR "product marketing"`);
+  let found;
+  try {
+    found = extract(People,
+      `From these search results, extract real people who currently work at "${c.company}" (the company hiring for "${c.title}"). Only people, only this company, linkedin_url must be a linkedin.com/in/ URL.`,
+      raw.slice(0, 6000),
+      { tier: "light", retries: 2, escalate: false, db, example: { people: [{ name: "Jane Doe", title: "Head of Developer Relations", linkedin_url: "https://linkedin.com/in/janedoe" }] } });
+  } catch { console.log(`  ${c.company}: people extraction failed`); continue; }
+
+  const compRow = await twenty("GET", `companies?filter=name[eq]:${encodeURIComponent(c.company)}&limit=1`);
+  const companyId = compRow?.data?.companies?.[0]?.id;
+
+  let added = 0;
+  for (const p of found.people) {
+    if (!/linkedin\.com\/in\//i.test(p.linkedin_url)) continue;
+    const persona = tier(p.title);
+    let msgs = { connect_note: "", dm: "" };
+    try {
+      msgs = extract(Msgs,
+        `Write for the candidate below: (1) connect_note — a LinkedIn connection note UNDER 290 CHARACTERS to ${p.name} (${p.title} at ${c.company}), referencing the "${c.title}" opening, warm and specific, no flattery; (2) dm — a message under 150 words for after they accept, one concrete proof point, one clear ask.\nCandidate: ${profile.proof_points.slice(0, 4).join("; ")}. Available immediately.`,
+        `Person: ${p.name}, ${p.title} @ ${c.company}. Opening: ${c.title}.`,
+        { tier: "light", retries: 2, escalate: false, db, example: { connect_note: "Hi Jane — saw the DevRel opening at Acme. I onboarded 7,000+ devs at Team1 and would love to connect.", dm: "Thanks for connecting! ..." } });
+    } catch {}
+    try {
+      db.prepare("INSERT INTO people (company, name, title, persona_tier, linkedin, provenance) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(c.company, p.name, p.title, persona, p.linkedin_url, JSON.stringify({ source: "tinyfish-search", at: new Date().toISOString() }));
+    } catch { continue; } // unique index: already known
+    const created = await twenty("POST", "people", {
+      name: { firstName: p.name.split(" ")[0], lastName: p.name.split(" ").slice(1).join(" ") || "-" },
+      jobTitle: p.title,
+      linkedinLink: { primaryLinkUrl: p.linkedin_url },
+      personaTier: persona.toUpperCase(),
+      fetchEmail: "NO",
+      linkedinNote: msgs.connect_note,
+      dmDraft: msgs.dm,
+      actor,
+      ...(companyId ? { companyId } : {}),
+    });
+    if (created) added++;
+  }
+  db.prepare("INSERT OR REPLACE INTO lookups (key, provider, result, cost) VALUES (?, 'people-run', ?, 0)")
+    .run(`crm:people:${c.company.toLowerCase()}`, JSON.stringify({ added, at: new Date().toISOString() }));
+  console.log(`  ${c.company}: ${added} people added to CRM`);
+}
+console.log("\nNext: in Twenty, set Fetch Email = YES on the people you pick; then run 6-emails.mts");

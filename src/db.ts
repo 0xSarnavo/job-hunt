@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const VERSION = 3;
+const VERSION = 4;
 
 export function openDb(path = "jobhunt.db"): Database.Database {
   const db = new Database(path);
@@ -17,6 +17,8 @@ export function openDb(path = "jobhunt.db"): Database.Database {
   if (v > 0 && v < 2) db.exec("ALTER TABLE jobs ADD COLUMN exp_required REAL");
   if (v > 0 && v < 3)
     db.exec("ALTER TABLE jobs ADD COLUMN llm_score REAL; ALTER TABLE jobs ADD COLUMN llm_reason TEXT");
+  if (v < 4)
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_people_unique ON people(lower(company), lower(name))");
   db.pragma(`user_version = ${VERSION}`);
   return db;
 }

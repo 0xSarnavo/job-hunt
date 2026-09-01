@@ -59,7 +59,9 @@ hosting). Chosen over Comp AI CRM for the mature human UI; the agent side alread
 **SQLite remains the system of record** — the CRM is a one-way view: a `sync` CLI verb pushes
 `companies`/`people`/`touches` into Twenty via its REST API (`TWENTY_API_KEY` + `TWENTY_URL`
 in .env), built alongside step 8. Never write pipeline state into the CRM by hand; it gets
-overwritten on next sync.
+overwritten on next sync. **Attribution** (decided 1 Sep 2026): one shared API key; who-did-what
+is data — every CLI write stamps `JOBHUNT_ACTOR` (env, or `--actor` flag) into `touches.actor`,
+and sync mirrors it to an "Actor" field in Twenty, filterable in any view.
 
 Rejected outright: **Monid** (monid.ai) — metered per-call billing ($1 starter credit, then $0.0013+/call, premium endpoints extra), so it fails the free constraint; its catalog (scraping, enrichment, people data) is the paid version of what the waterfall gets free; and a runtime tool-selection layer fights the cache-forever/per-field-provenance design. Revisit only as a paid gap-filler if a specific lookup repeatedly defeats the free waterfall.
 

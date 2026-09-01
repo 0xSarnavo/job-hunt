@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS touches (
   person      INTEGER REFERENCES people(id),
   channel     TEXT,              -- linkedin|email
   state       TEXT,              -- queued|invited|warm|drafted|sent|replied|closed
+  actor       TEXT,              -- who moved this state: claude-code|opencode|cron|human|...
   sent_at     TEXT,
   accepted_at TEXT,
   replied_at  TEXT

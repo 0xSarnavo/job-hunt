@@ -51,12 +51,15 @@ Tested against two samples before writing any code:
 
 Rejected: **ScrapeGraphAI** — its job (LLM-extracts structured data from fetched pages) is
 exactly what TinyFish Fetch + `src/llm.ts` already do, in our language; adding it means a
-Python runtime for zero new capability, and its hosted API is paid. **CRM frontends**
-(Twenty, Comp AI CRM — both open source, both solid): deferred, not rejected. SQLite is the
-system of record (PLAN §9); a CRM is a *view* of `people`/`touches`, and standing up
-Docker+Postgres before a single mail has been sent is maintenance with no user. Revisit after
-step 8 when there's real pipeline to look at — Comp AI CRM (TypeScript, agent-first) fits the
-stack; Twenty is the more mature human UI.
+Python runtime for zero new capability, and its hosted API is paid. **CRM: Twenty, selected**
+(decided 1 Sep 2026 — user wants human-facing tracking/stats). Deployed from the Railway
+`twenty-crm` template into project `job-hunt-crm` (server + worker + Postgres + Redis):
+https://twenty-production-ee00.up.railway.app — the one paid piece of the stack (Railway
+hosting). Chosen over Comp AI CRM for the mature human UI; the agent side already has SQLite.
+**SQLite remains the system of record** — the CRM is a one-way view: a `sync` CLI verb pushes
+`companies`/`people`/`touches` into Twenty via its REST API (`TWENTY_API_KEY` + `TWENTY_URL`
+in .env), built alongside step 8. Never write pipeline state into the CRM by hand; it gets
+overwritten on next sync.
 
 Rejected outright: **Monid** (monid.ai) — metered per-call billing ($1 starter credit, then $0.0013+/call, premium endpoints extra), so it fails the free constraint; its catalog (scraping, enrichment, people data) is the paid version of what the waterfall gets free; and a runtime tool-selection layer fights the cache-forever/per-field-provenance design. Revisit only as a paid gap-filler if a specific lookup repeatedly defeats the free waterfall.
 

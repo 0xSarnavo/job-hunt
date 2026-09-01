@@ -56,6 +56,7 @@ const MODEL: Record<string, FieldSpec[]> = {
     { name: "jobUrl", label: "Job URL", type: "TEXT" },
     { name: "applyLink", label: "Apply Link", type: "LINKS" },
     { name: "postedAt", label: "Posted At", type: "DATE_TIME" },
+    { name: "expAsk", label: "Exp Ask", type: "TEXT", description: "years of experience the posting asks for, when above the profile's stretch" },
     { name: "matchScore", label: "Match Score", type: "NUMBER" },
     { name: "appliedAt", label: "Applied At", type: "DATE_TIME" },
     { name: "channel", label: "Channel", type: "SELECT", options: `[${[

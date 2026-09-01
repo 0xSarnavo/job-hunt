@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   posted_at   TEXT,
   source      TEXT,
   description TEXT,              -- plain text; feeds scoring, drafts, and tailor-cv
+  exp_required REAL,             -- years the posting asks for (null = not stated)
   match_score REAL,
   matched_at  TEXT,
   rejected    TEXT               -- reject reason from hard filters, NULL = alive
@@ -62,5 +63,4 @@ CREATE TABLE IF NOT EXISTS lookups (
   observed_at TEXT DEFAULT (datetime('now'))
 );
 
-PRAGMA user_version = 1;
--- migrations below --
+-- schema version is managed in db.ts (PRAGMA user_version); migrations live there too.

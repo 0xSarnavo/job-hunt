@@ -64,8 +64,12 @@ export function score(p: Posting, profile: Profile): Verdict {
   }
 
   // --- title match 0–40 ---
+  // Wrong-function titles never get title credit even when they contain target
+  // keywords ("Recruiter (GTM & Business)" — the comparison test's false positive).
+  const WRONG_FUNCTION = /\b(recruiter|talent acquisition|account executive|account manager|sales development|\bsdr\b|\bbdr\b|customer success|journeyman)\b/i;
   let titleScore = 0;
   let titleHit = "";
+  if (!WRONG_FUNCTION.test(title))
   for (const rt of profile.role_titles) {
     const t = norm(rt);
     if (title.includes(t)) {
@@ -87,7 +91,12 @@ export function score(p: Posting, profile: Profile): Verdict {
   let locWhy = "";
   if (remoteish && GEO_RESTRICTED.test(text))
     return rejectVerdict("geo-restricted remote", "remote but restricted to a region we can't work from");
-  if (remoteish) { locScore = 20; locWhy = "remote"; }
+  // Location field naming a specific western country + Remote usually means
+  // work-authorization there ("Georgia, USA, Remote") — show it, but low.
+  const usRemote = /\b(usa|united states|u\.s\.|canada|germany|austria|france|netherlands)\b/i.test(loc)
+    && !/india|worldwide|global|anywhere/i.test(loc);
+  if (remoteish && usRemote) { locScore = 5; locWhy = "remote(geo?)"; }
+  else if (remoteish) { locScore = 20; locWhy = "remote"; }
   else if (/bengaluru|bangalore/.test(loc)) { locScore = 12; locWhy = "bengaluru"; }
   else if (/kolkata|calcutta/.test(loc)) { locScore = 10; locWhy = "kolkata"; }
   else if (/\bindia\b/.test(loc)) { locScore = 8; locWhy = "india"; }
@@ -98,10 +107,17 @@ export function score(p: Posting, profile: Profile): Verdict {
   if (p.posted_at && (Date.now() - Date.parse(p.posted_at)) / 86_400_000 <= 14) fresh = 10;
 
   // --- experience ask: mark, never reject (user has 2.5y, stretch 3) ---
+  // Unstated asks are implied by title seniority ("Senior PMM" ≈ 5y,
+  // "Head of/Director" ≈ 8y) — the comparison test's second finding.
+  const implied =
+    /\b(head of|director|vp|vice president)\b/i.test(title) ? 8 :
+    /\b(principal|staff)\b/i.test(title) ? 7 :
+    /\b(senior|sr\.?)\b/i.test(title) ? 5 : null;
+  const effectiveExp = expRequired ?? implied;
   const stretchYears = (profile.years ?? 3) + 0.5;
   let expPenalty = 0;
-  if (expRequired != null && expRequired > stretchYears)
-    expPenalty = Math.min(Math.round((expRequired - stretchYears) * 3), 12);
+  if (effectiveExp != null && effectiveExp > stretchYears)
+    expPenalty = Math.min(Math.round((effectiveExp - stretchYears) * 3), 12);
 
   const total = Math.max(titleScore + kwScore + locScore + fresh - expPenalty, 0);
   return {
@@ -110,6 +126,6 @@ export function score(p: Posting, profile: Profile): Verdict {
     expRequired,
     why:
       `title:${titleScore}(${titleHit || "none"}) kw:${kwScore}(${kwHits.slice(0, 4).join(",") || "none"}) loc:${locScore}(${locWhy}) fresh:${fresh}` +
-      (expRequired != null ? ` exp-ask:${expRequired}y${expPenalty ? `(-${expPenalty})` : ""}` : ""),
+      (effectiveExp != null ? ` exp-ask:${expRequired ?? `~${implied}(implied)`}y${expPenalty ? `(-${expPenalty})` : ""}` : ""),
   };
 }

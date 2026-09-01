@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   source      TEXT,
   description TEXT,              -- plain text; feeds scoring, drafts, and tailor-cv
   exp_required REAL,             -- years the posting asks for (null = not stated)
+  llm_score   REAL,              -- second-pass score from the free-model judge (step 2)
+  llm_reason  TEXT,
   match_score REAL,
   matched_at  TEXT,
   rejected    TEXT               -- reject reason from hard filters, NULL = alive

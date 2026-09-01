@@ -54,6 +54,7 @@ export interface ExtractOpts {
   retries?: number; // per tier
   escalate?: boolean; // retry exhausted on light → one heavy attempt
   db?: Database.Database; // enables forever-cache in `lookups`
+  example?: unknown; // sample valid output — weak free models comply far better with one
 }
 
 export function extract<S extends z.ZodType>(
@@ -62,7 +63,7 @@ export function extract<S extends z.ZodType>(
   input: string,
   opts: ExtractOpts = {},
 ): z.infer<S> {
-  const { tier = "light", retries = 2, escalate = true, db } = opts;
+  const { tier = "light", retries = 2, escalate = true, db, example } = opts;
 
   // Cache on task+input only — extraction facts are model-independent,
   // so swapping models must not churn the cache (PLAN §5 ethos).
@@ -78,7 +79,8 @@ export function extract<S extends z.ZodType>(
   const jsonSchema = JSON.stringify(z.toJSONSchema(schema));
   let prompt =
     `${task}\n\nINPUT:\n${input}\n\n` +
-    `Respond with ONLY a JSON value matching this JSON Schema — no prose, no code fences:\n${jsonSchema}`;
+    `Respond with ONLY a JSON value matching this JSON Schema — no prose, no code fences:\n${jsonSchema}` +
+    (example ? `\nExample of a valid response: ${JSON.stringify(example)}` : "");
 
   const tiers: Tier[] = tier === "light" && escalate ? ["light", "heavy"] : [tier];
   let lastErr: unknown;

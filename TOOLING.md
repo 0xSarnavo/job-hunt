@@ -49,6 +49,15 @@ Tested against two samples before writing any code:
 | Scheduling | launchd · cron | **launchd** plists | native on macOS, survives reboots, per-job logs |
 | HTTP | native fetch · axios · got | **native fetch** | nothing here needs more |
 
+Rejected: **ScrapeGraphAI** — its job (LLM-extracts structured data from fetched pages) is
+exactly what TinyFish Fetch + `src/llm.ts` already do, in our language; adding it means a
+Python runtime for zero new capability, and its hosted API is paid. **CRM frontends**
+(Twenty, Comp AI CRM — both open source, both solid): deferred, not rejected. SQLite is the
+system of record (PLAN §9); a CRM is a *view* of `people`/`touches`, and standing up
+Docker+Postgres before a single mail has been sent is maintenance with no user. Revisit after
+step 8 when there's real pipeline to look at — Comp AI CRM (TypeScript, agent-first) fits the
+stack; Twenty is the more mature human UI.
+
 Rejected outright: **Monid** (monid.ai) — metered per-call billing ($1 starter credit, then $0.0013+/call, premium endpoints extra), so it fails the free constraint; its catalog (scraping, enrichment, people data) is the paid version of what the waterfall gets free; and a runtime tool-selection layer fights the cache-forever/per-field-provenance design. Revisit only as a paid gap-filler if a specific lookup repeatedly defeats the free waterfall.
 
 ---
@@ -97,7 +106,7 @@ better-sqlite3, schema as one `.sql` file, WAL mode, a `PRAGMA user_version` mig
 | Source | Access | Note |
 |---|---|---|
 | Adzuna | free app id+key, ~1,000 calls/mo | has an India country endpoint |
-| Jooble | free API key | widest geography |
+| Jooble | free API key, **500 requests default** (their 1 Sep 2026 grant email; more on request) | widest geography — budget it: 1 query/day/geo ≈ 60–90 req/mo |
 | Remotive / RemoteOK / Arbeitnow | open JSON, no key | RemoteOK requires attribution/linkback |
 | HN Who's Hiring | Algolia API (`hn.algolia.com`), no key | find monthly thread → fetch comments → `claude -p` parses each into a `Posting` |
 
@@ -119,11 +128,13 @@ tells you a filter is too tight.
 | Candidate | Free allowance | Verdict |
 |---|---|---|
 | TinyFish Search | free, 30 req/min · 500/hr | **selected, rung 1** — structured JSON, limits dwarf the alternatives |
-| Google Programmable Search JSON API | 100 queries/day | **selected, rung 2** — `site:linkedin.com/in "{company}" {title}` finds people legitimately |
-| Brave Search API | ~2,000 queries/mo (verify current terms at signup) | **selected, rung 3** — same waterfall pattern as email |
+| Fiber AI (api.fiber.ai) | allowance TBD — confirm before wiring | **selected, rung 2** (user decision, 1 Sep 2026) — real prospecting DB: people/company search, contact reveal, job-change monitoring; behind the cache like every vendor |
+| Google Programmable Search JSON API | 100 queries/day | **selected, rung 3** — `site:linkedin.com/in "{company}" {title}` finds people legitimately |
+| Brave Search API | ~2,000 queries/mo (verify current terms at signup) | **selected, rung 4** — same waterfall pattern as email |
 | GitHub org members API | free | **selected** — best signal for eng leads at small startups; maps to real names via profile pages |
-| Company /team /about pages | free | **selected** — fetch + `claude -p` extraction |
-| Apollo/RocketReach free tiers | credit-gated, API access unclear on free | rejected for now — re-evaluate only if the above under-fills |
+| Company /team /about pages | free | **selected** — fetch + LLM-light extraction |
+| Apollo.io | free plan has **no API access** (API starts on paid plans); 10 export credits/mo in the UI | manual-only: use the web UI as a lookup of last resort and type results in; wire the API only if a paid plan ever happens |
+| RocketReach free tier | credit-gated | rejected — covered by the above |
 
 Hiring-manager inference (posting → likely req owner) is a `claude -p` job over the posting plus the people list; PLAN §11 already budgets for ~60% accuracy.
 

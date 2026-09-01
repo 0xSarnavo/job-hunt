@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { loadProfile } from "./profile.ts";
 import { openDb } from "./db.ts";
+import { ingest, reportRun } from "./ingest.ts";
 import { score } from "./score.ts";
 import { resolve } from "./resolver.ts";
 import { fetchBoard, type AtsKind } from "./sources/ats.ts";
@@ -18,37 +19,6 @@ try {
 
 const SOURCES: JobSource[] = [remotive, remoteok, arbeitnow, weworkremotely, hnWhoIsHiring, adzuna, jooble];
 
-function store(db: ReturnType<typeof openDb>, postings: Posting[], profile: ReturnType<typeof loadProfile>) {
-  const insertJob = db.prepare(
-    `INSERT INTO jobs (url, company, title, location, posted_at, source, description, exp_required, match_score, matched_at, rejected)
-     VALUES (@url, @company, @title, @location, @posted_at, @source, @description, @exp, @score, datetime('now'), @reject)
-     ON CONFLICT(url) DO NOTHING`,
-  );
-  const insertCompany = db.prepare(
-    `INSERT INTO companies (domain, name, source) VALUES (?, ?, ?) ON CONFLICT(domain) DO NOTHING`,
-  );
-  let added = 0, rejected = 0;
-  const seen = new Set<string>(); // cross-board dedupe within a run: company+title
-  for (const p of postings) {
-    const dedupeKey = `${p.company}::${p.title}`.toLowerCase();
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-    const v = score(p, profile);
-    const res = insertJob.run({
-      url: p.url, company: p.company, title: p.title, location: p.location ?? "",
-      posted_at: p.posted_at ?? null, source: p.source,
-      description: (p.description ?? "").slice(0, 4000),
-      exp: v.expRequired, score: v.score, reject: v.reject,
-    });
-    if (res.changes > 0) {
-      added++;
-      if (v.reject) rejected++;
-      else insertCompany.run(p.company.toLowerCase().replace(/[^a-z0-9]/g, ""), p.company, p.source);
-    }
-  }
-  return { added, rejected };
-}
-
 const program = new Command("jobhunt");
 const todo = (verb: string) => () => console.log(`${verb}: not implemented yet (see TOOLING.md build order)`);
 
@@ -61,8 +31,7 @@ program
     for (const src of SOURCES) {
       try {
         const postings = await src.fetchPostings(profile);
-        const { added, rejected } = store(db, postings, profile);
-        console.log(`${src.name.padEnd(16)} fetched ${String(postings.length).padStart(4)}  new ${String(added).padStart(4)}  (${rejected} rejected by filters)`);
+        reportRun(db, src.name, ingest(db, postings, profile));
       } catch (err) {
         console.error(`${src.name}: FAILED ${String(err).slice(0, 120)}`);
       }
@@ -89,7 +58,7 @@ program
         const v = score(p, profile);
         if (!v.reject && v.score >= 30) console.log(`  ${String(v.score).padStart(3)}  ${p.title}  (${p.location || "?"})`);
       }
-      store(db, postings, profile);
+      ingest(db, postings, profile);
     }
   });
 

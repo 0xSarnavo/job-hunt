@@ -47,7 +47,8 @@ export const arbeitnow: JobSource = {
   async fetchPostings() {
     const out: Posting[] = [];
     let url = "https://www.arbeitnow.com/api/job-board-api";
-    for (let page = 0; page < 3 && url; page++) {
+    const pages = Number(process.env.ARBEITNOW_PAGES ?? 2); // daily runs: first pages only
+    for (let page = 0; page < pages && url; page++) {
       const d = await getJson(url);
       for (const j of d?.data ?? [])
         out.push({

@@ -11,7 +11,7 @@ export const adzuna: JobSource = {
     const id = process.env.ADZUNA_APP_ID, key = process.env.ADZUNA_APP_KEY;
     if (!id || !key) return [];
     const out: Posting[] = [];
-    for (const rt of profile.role_titles.slice(0, 6)) {
+    for (const rt of profile.role_titles.slice(0, Number(process.env.ADZUNA_QUERIES ?? 6))) {
       const d = await getJson(
         `https://api.adzuna.com/v1/api/jobs/in/search/1?app_id=${id}&app_key=${key}` +
           `&results_per_page=50&what_phrase=${encodeURIComponent(rt)}` +
@@ -39,7 +39,7 @@ export const jooble: JobSource = {
     const key = process.env.JOOBLE_API_KEY;
     if (!key) return [];
     const out: Posting[] = [];
-    for (const rt of profile.role_titles.slice(0, 2)) {
+    for (const rt of profile.role_titles.slice(0, Number(process.env.JOOBLE_QUERIES ?? 2))) {
       const d = await postJson(`https://jooble.org/api/${key}`, {
         keywords: rt,
         location: "remote",

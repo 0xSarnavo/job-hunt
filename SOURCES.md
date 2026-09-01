@@ -24,9 +24,18 @@ Every source below feeds the same pipeline. Status says what it needs before it 
 | Jooble | widest country coverage | free API key | **free signup needed** |
 | Company careers pages | jobs from companies not on any board above | TinyFish Fetch (renders the page), Firecrawl as backup | **key in .env** |
 | YC Work at a Startup | startup jobs + funding stage | TinyFish/Firecrawl fetch | **key in .env** |
+| VC portfolio boards (a16z, Sequoia, Lightspeed, Accel…) | every company is funded by definition + live jobs + headcount — motion B pre-packaged. a16z alone: 852 companies, 19k jobs (checked 1 Sep 2026) | TinyFish Fetch renders them fine (verified on a16z) | **key in .env** |
 | Wellfound | startup jobs | heavy anti-bot; Firecrawl, test cheaply first | **key in .env** |
 | Naukri / Instahyre / Cutshort | India volume | login-walled scraping | **later** |
 | LinkedIn Jobs | best people-linkage | your own browser session only | **later** |
+
+### Why the big consumer boards (Indeed, Glassdoor, Monster, ZipRecruiter, Google Jobs) aren't here
+
+Three reasons. They have no free APIs (Indeed shut theirs down) and the strongest anti-bot
+walls on the internet — fighting them costs real credits. Their listings are mostly *copies*
+of the ATS postings we already fetch first-hand, plus stale reposts — the freshness filter
+would throw most of it away. And Adzuna + Jooble already give us the legal, free, API version
+of the same aggregate view. Same jobs, zero fight.
 
 ## Funding news — how we hear a company just raised money
 

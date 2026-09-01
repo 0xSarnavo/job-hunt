@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS companies (
   pitch       INTEGER DEFAULT 0,  -- 1 = proactive GTM-pitch target (funded, 5-50 headcount)
   first_seen  TEXT DEFAULT (datetime('now'))
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_people_unique ON people(lower(company), lower(name));
 
 CREATE TABLE IF NOT EXISTS jobs (
   url         TEXT PRIMARY KEY,
@@ -41,6 +40,8 @@ CREATE TABLE IF NOT EXISTS people (
   email_status TEXT,             -- valid|risky|invalid|unverified
   provenance   TEXT              -- JSON: per-field {source, confidence, observed_at}
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_people_unique ON people(lower(company), lower(name));
 
 CREATE TABLE IF NOT EXISTS touches (
   id          INTEGER PRIMARY KEY,

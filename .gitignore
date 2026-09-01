@@ -1,7 +1,11 @@
 node_modules/
-.env
-.env.*
-*.sqlite
-*.db
-.DS_Store
 dist/
+
+# secrets and personal data — never committed (repo is public)
+.env
+profile.yaml
+*.db
+*.db-wal
+*.db-shm
+gmail-token.json
+gmail-credentials.json

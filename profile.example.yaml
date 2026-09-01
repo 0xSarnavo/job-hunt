@@ -1,0 +1,23 @@
+# Copy to profile.yaml (gitignored — comp and dealbreakers are not public data).
+# Half-done is fine: hard filters run with whatever exists, scoring waits for
+# the full profile. Interview > resume > LinkedIn where they conflict (PLAN §3).
+
+role_titles: []        # e.g. ["backend engineer", "platform engineer"]
+stack: []              # e.g. ["typescript", "go", "postgres"]
+years:                 # e.g. 4
+domains: []            # e.g. ["fintech", "devtools"]
+
+# ranked, best first — decided 1 Sep 2026
+locations:
+  - remote-global
+  - india-remote
+  - bengaluru
+  - kolkata
+
+comp_band:             # e.g. { min: 0, currency: "INR" }
+dealbreakers: []       # hard filters, e.g. ["crypto", "onsite-only"]
+proof_points: []       # feeds personalisation, not scoring
+
+# a posting older than this is dead — hard filter, pushed into source
+# queries where the API supports it (Adzuna max_days_old)
+max_posting_age_days: 60

@@ -55,9 +55,20 @@ Rejected outright: **Monid** (monid.ai) — metered per-call billing ($1 starter
 
 ## Step 1 — profile.yaml
 
-**Must do:** produce the scoring target: `role_titles`, `stack`, `years`, `domains`, `location`, `remote_ok`, `comp_band`, `dealbreakers`, `proof_points`.
+**Must do:** produce the scoring target: `role_titles`, `stack`, `years`, `domains`,
+`locations` (ranked list per the geography decision, not a boolean), `comp_band`,
+`dealbreakers`, `proof_points`, and `max_posting_age_days: 60` — a posting older than two
+months is dead; treat it as a hard filter, not a score penalty.
 
-Not a code step. A guided interview in a Claude Code session, merging the resume (Claude reads the PDF directly) and the official LinkedIn data export (Settings → *Get a copy of your data* — free, no scraping). Interview wins conflicts, per PLAN §3. Output validated by the zod schema that ships in step 3.
+Not a code step. A guided interview in a Claude Code session, merging the resume (Claude
+reads the PDF directly) and the official LinkedIn data export (Settings → *Get a copy of your
+data* — free, no scraping). Interview wins conflicts, per PLAN §3. Output validated by the
+zod schema that ships in step 3.
+
+**The profile completes incrementally** (it is half done as of 1 Sep 2026). The pipeline must
+not block on a full profile: hard filters (freshness, dealbreakers, locations) run with
+whatever fields exist; scoring waits for the full profile. Missing field = filter skipped,
+never crash.
 
 ## Step 2 — ATS resolver + big-3 source
 
@@ -90,7 +101,16 @@ better-sqlite3, schema as one `.sql` file, WAL mode, a `PRAGMA user_version` mig
 | Remotive / RemoteOK / Arbeitnow | open JSON, no key | RemoteOK requires attribution/linkback |
 | HN Who's Hiring | Algolia API (`hn.algolia.com`), no key | find monthly thread → fetch comments → `claude -p` parses each into a `Posting` |
 
-Which of these get built first depends on the geography decision — Adzuna/Jooble carry an India-first mix; Remotive/RemoteOK/HN carry a remote-global mix.
+Per the geography decision, the keyless remote-global sources (Remotive, RemoteOK, Arbeitnow,
+HN, big-3 boards) build first; Adzuna (India endpoint) and Jooble follow.
+
+**Cleaning order, applied at ingestion:** normalise to `Posting` → dedupe (the same role is
+cross-posted on multiple boards; key on canonical apply-URL, else normalised company+title) →
+hard filters (freshness ≤ `max_posting_age_days`, ranked locations, dealbreakers) → then
+score. Push filters into the source query where the API allows it — Adzuna's `max_days_old`,
+Jooble's date filter — so quota is never spent fetching postings that get dropped locally.
+Filtered-out postings are still recorded in `jobs` with a reject reason: that's what later
+tells you a filter is too tight.
 
 ## Step 5 — people search + persona tiering
 

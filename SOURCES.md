@@ -20,6 +20,7 @@ Every source below feeds the same pipeline. Status says what it needs before it 
 | RemoteOK | remote jobs feed (needs attribution link) | open JSON, no key | **ready now** |
 | Arbeitnow | remote/Europe-lean feed | open JSON, no key | **ready now** |
 | HN "Who is hiring" | monthly thread, high-signal startup jobs | Algolia API, no key | **ready now** |
+| We Work Remotely | remote jobs, strong marketing/devrel categories | RSS feeds, no key | **ready now** |
 | Adzuna | big aggregate board, has India | free API, ~1,000 calls/mo | **free signup needed** |
 | Jooble | widest country coverage | free API key | **free signup needed** |
 | Company careers pages | jobs from companies not on any board above | TinyFish Fetch (renders the page), Firecrawl as backup | **key in .env** |
@@ -27,6 +28,7 @@ Every source below feeds the same pipeline. Status says what it needs before it 
 | VC portfolio boards (a16z, Sequoia, Lightspeed, Accel…) | every company is funded by definition + live jobs + headcount — motion B pre-packaged. a16z alone: 852 companies, 19k jobs (checked 1 Sep 2026) | TinyFish Fetch renders them fine (verified on a16z) | **key in .env** |
 | Wellfound | startup jobs | heavy anti-bot; Firecrawl, test cheaply first | **key in .env** |
 | Naukri / Instahyre / Cutshort | India volume | login-walled scraping | **later** |
+| Otta / Welcome to the Jungle | curated startup jobs, good matching | login-walled scraping | **later** |
 | LinkedIn Jobs | best people-linkage | your own browser session only | **later** |
 
 ### Why the big consumer boards (Indeed, Glassdoor, Monster, ZipRecruiter, Google Jobs) aren't here

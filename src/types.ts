@@ -12,6 +12,7 @@ export const Profile = z.object({
   locations: z.array(z.string()).default([]),
   comp_band: z.object({ min: z.number(), currency: z.string() }).optional(),
   dealbreakers: z.array(z.string()).default([]),
+  availability: z.string().optional(),
   proof_points: z.array(z.string()).default([]),
   max_posting_age_days: z.number().default(60),
 });

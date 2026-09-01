@@ -6,7 +6,8 @@
   "scripts": {
     "cli": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/*.test.ts"
+    "test": "tsx --test src/*.test.ts",
+    "setup-crm": "tsx src/setup-crm.ts"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",

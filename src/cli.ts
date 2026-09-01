@@ -20,8 +20,8 @@ const SOURCES: JobSource[] = [remotive, remoteok, arbeitnow, weworkremotely, hnW
 
 function store(db: ReturnType<typeof openDb>, postings: Posting[], profile: ReturnType<typeof loadProfile>) {
   const insertJob = db.prepare(
-    `INSERT INTO jobs (url, company, title, location, posted_at, source, description, match_score, matched_at, rejected)
-     VALUES (@url, @company, @title, @location, @posted_at, @source, @description, @score, datetime('now'), @reject)
+    `INSERT INTO jobs (url, company, title, location, posted_at, source, description, exp_required, match_score, matched_at, rejected)
+     VALUES (@url, @company, @title, @location, @posted_at, @source, @description, @exp, @score, datetime('now'), @reject)
      ON CONFLICT(url) DO NOTHING`,
   );
   const insertCompany = db.prepare(
@@ -38,7 +38,7 @@ function store(db: ReturnType<typeof openDb>, postings: Posting[], profile: Retu
       url: p.url, company: p.company, title: p.title, location: p.location ?? "",
       posted_at: p.posted_at ?? null, source: p.source,
       description: (p.description ?? "").slice(0, 4000),
-      score: v.score, reject: v.reject,
+      exp: v.expRequired, score: v.score, reject: v.reject,
     });
     if (res.changes > 0) {
       added++;
@@ -100,10 +100,10 @@ program
     const profile = loadProfile();
     const db = openDb();
     const rows = db.prepare("SELECT url, company, title, location, posted_at, source, description FROM jobs").all() as any[];
-    const upd = db.prepare("UPDATE jobs SET match_score = ?, rejected = ?, matched_at = datetime('now') WHERE url = ?");
+    const upd = db.prepare("UPDATE jobs SET match_score = ?, rejected = ?, exp_required = ?, matched_at = datetime('now') WHERE url = ?");
     for (const r of rows) {
       const v = score({ ...r, description: r.description ?? "" }, profile);
-      upd.run(v.score, v.reject, r.url);
+      upd.run(v.score, v.reject, v.expRequired, r.url);
     }
     console.log(`re-scored ${rows.length} jobs`);
   });

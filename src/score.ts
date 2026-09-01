@@ -16,6 +16,23 @@ export interface Verdict {
   score: number;
   reject: string | null;
   why: string; // human-readable breakdown, shown in CRM notes / status
+  expRequired: number | null; // years the posting asks for; >3 is marked, never rejected
+}
+
+// Years-of-experience ask, read near the word "experience" to avoid company-age
+// noise ("founded 8 years ago"). Ranges take their minimum ("3-5 years" → 3);
+// multiple asks take the largest.
+export function extractExpYears(text: string): number | null {
+  const found: number[] = [];
+  const re = /(\d{1,2})\s*(?:\+|plus)?\s*(?:[-–—]|to)?\s*(?:\d{1,2})?\s*\+?\s*(?:years?|yrs?)\b/gi;
+  for (const m of text.matchAll(re)) {
+    const idx = m.index ?? 0;
+    const window = text.slice(Math.max(0, idx - 60), idx + m[0].length + 60);
+    if (!/experien|exp\b|track record|working (in|with|as)/i.test(window)) continue;
+    const n = parseInt(m[1]!, 10);
+    if (n >= 1 && n <= 20) found.push(n);
+  }
+  return found.length ? Math.max(...found) : null;
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ");
@@ -33,14 +50,17 @@ export function score(p: Posting, profile: Profile): Verdict {
   const title = norm(p.title);
   const text = norm(`${p.title} ${p.description ?? ""}`);
   const loc = norm(p.location ?? "");
+  const expRequired = extractExpYears(text);
+
+  const rejectVerdict = (reject: string, why: string): Verdict => ({ score: 0, reject, why, expRequired });
 
   for (const [re, reason] of DEALBREAKER_PATTERNS)
-    if (re.test(text)) return { score: 0, reject: reason, why: reason };
+    if (re.test(text)) return rejectVerdict(reason, reason);
 
   if (p.posted_at) {
     const ageDays = (Date.now() - Date.parse(p.posted_at)) / 86_400_000;
     if (ageDays > profile.max_posting_age_days)
-      return { score: 0, reject: "stale", why: `${Math.round(ageDays)}d old > ${profile.max_posting_age_days}d` };
+      return rejectVerdict("stale", `${Math.round(ageDays)}d old > ${profile.max_posting_age_days}d`);
   }
 
   // --- title match 0–40 ---
@@ -66,21 +86,30 @@ export function score(p: Posting, profile: Profile): Verdict {
   let locScore = 0;
   let locWhy = "";
   if (remoteish && GEO_RESTRICTED.test(text))
-    return { score: 0, reject: "geo-restricted remote", why: "remote but restricted to a region we can't work from" };
+    return rejectVerdict("geo-restricted remote", "remote but restricted to a region we can't work from");
   if (remoteish) { locScore = 20; locWhy = "remote"; }
   else if (/bengaluru|bangalore/.test(loc)) { locScore = 12; locWhy = "bengaluru"; }
   else if (/kolkata|calcutta/.test(loc)) { locScore = 10; locWhy = "kolkata"; }
   else if (/\bindia\b/.test(loc)) { locScore = 8; locWhy = "india"; }
-  else return { score: 0, reject: "location", why: `onsite ${p.location}` };
+  else return rejectVerdict("location", `onsite ${p.location}`);
 
   // --- freshness bonus 0–10 ---
   let fresh = 0;
   if (p.posted_at && (Date.now() - Date.parse(p.posted_at)) / 86_400_000 <= 14) fresh = 10;
 
-  const total = titleScore + kwScore + locScore + fresh;
+  // --- experience ask: mark, never reject (user has 2.5y, stretch 3) ---
+  const stretchYears = (profile.years ?? 3) + 0.5;
+  let expPenalty = 0;
+  if (expRequired != null && expRequired > stretchYears)
+    expPenalty = Math.min(Math.round((expRequired - stretchYears) * 3), 12);
+
+  const total = Math.max(titleScore + kwScore + locScore + fresh - expPenalty, 0);
   return {
     score: total,
     reject: null,
-    why: `title:${titleScore}(${titleHit || "none"}) kw:${kwScore}(${kwHits.slice(0, 4).join(",") || "none"}) loc:${locScore}(${locWhy}) fresh:${fresh}`,
+    expRequired,
+    why:
+      `title:${titleScore}(${titleHit || "none"}) kw:${kwScore}(${kwHits.slice(0, 4).join(",") || "none"}) loc:${locScore}(${locWhy}) fresh:${fresh}` +
+      (expRequired != null ? ` exp-ask:${expRequired}y${expPenalty ? `(-${expPenalty})` : ""}` : ""),
   };
 }

@@ -18,7 +18,7 @@ function tierCmd(tier: Tier): string[] {
   const env = tier === "light" ? process.env.LLM_LIGHT : process.env.LLM_HEAVY;
   if (env) return env.split(" ");
   return tier === "light"
-    ? ["opencode", "run", "-m", "opencode/nemotron-3.5-lightning-free"]
+    ? ["opencode", "run", "-m", "opencode/mimo-v2.5-free"] // nemotron-*-free return empty output
     : ["claude", "-p"];
 }
 

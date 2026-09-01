@@ -26,7 +26,7 @@ async function twenty(path: string, method: string, body?: unknown): Promise<any
 export async function syncToCrm(db: Database.Database): Promise<{ pushed: number; skipped: number }> {
   const actor = process.env.JOBHUNT_ACTOR || "unknown";
   const jobs = db.prepare(
-    `SELECT url, company, title, location, posted_at, match_score, source FROM jobs
+    `SELECT url, company, title, location, posted_at, exp_required, match_score, source FROM jobs
      WHERE rejected IS NULL AND match_score >= ? ORDER BY match_score DESC`,
   ).all(MIN_SCORE) as any[];
 
@@ -65,6 +65,7 @@ export async function syncToCrm(db: Database.Database): Promise<{ pushed: number
       jobUrl: j.url,
       applyLink: { primaryLinkUrl: j.url, primaryLinkLabel: "Apply" },
       ...(j.posted_at ? { postedAt: new Date(j.posted_at).toISOString() } : {}),
+      ...(j.exp_required > 3.5 ? { expAsk: `asks ${j.exp_required}y (you: 2.5–3)` } : {}),
       actor,
       ...(companyId ? { companyId } : {}),
     });

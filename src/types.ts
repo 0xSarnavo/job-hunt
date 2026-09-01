@@ -10,7 +10,8 @@ export const Profile = z.object({
   domains: z.array(z.string()).default([]),
   // ranked, best first: ["remote-global", "india-remote", "bengaluru", "kolkata"]
   locations: z.array(z.string()).default([]),
-  comp_band: z.object({ min: z.number(), currency: z.string() }).optional(),
+  // .nullish(): empty YAML keys parse as null, not undefined
+  comp_band: z.object({ min: z.number(), currency: z.string() }).nullish(),
   dealbreakers: z.array(z.string()).default([]),
   availability: z.string().optional(),
   proof_points: z.array(z.string()).default([]),

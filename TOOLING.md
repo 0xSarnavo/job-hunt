@@ -133,7 +133,7 @@ tells you a filter is too tight.
 | Brave Search API | ~2,000 queries/mo (verify current terms at signup) | **selected, rung 4** — same waterfall pattern as email |
 | GitHub org members API | free | **selected** — best signal for eng leads at small startups; maps to real names via profile pages |
 | Company /team /about pages | free | **selected** — fetch + LLM-light extraction |
-| Apollo.io | free plan has **no API access** (API starts on paid plans); 10 export credits/mo in the UI | manual-only: use the web UI as a lookup of last resort and type results in; wire the API only if a paid plan ever happens |
+| Apollo.io | free key verified 1 Sep 2026: all *people* endpoints locked (`API_INACCESSIBLE`), but **`organizations/enrich` works — 600 req/day, 50/min** | **selected for company enrichment, not people**: one call per domain returns headcount (feeds PLAN §4 persona tiering), industry, founded year, total funding + latest round stage/date (cross-checks motion B's RSS extraction), revenue, location. Cache forever per domain. People lookups stay manual via their UI |
 | RocketReach free tier | credit-gated | rejected — covered by the above |
 
 Hiring-manager inference (posting → likely req owner) is a `claude -p` job over the posting plus the people list; PLAN §11 already budgets for ~60% accuracy.

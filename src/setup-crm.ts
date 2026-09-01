@@ -104,6 +104,27 @@ for (const [obj, fields] of Object.entries(MODEL)) {
   }
 }
 
+// Custom object: API Usage — one row per vendor, synced by scripts/10-usage-sync.mts.
+if (!objId["apiUsage"]) {
+  const created = await gql("metadata",
+    `mutation { createOneObject(input:{object:{
+      nameSingular:"apiUsage", namePlural:"apiUsages",
+      labelSingular:"API Usage", labelPlural:"API Usages",
+      icon:"IconApi", description:"per-vendor API call counters (free-tier budgets)"
+    }}) { id } }`);
+  objId["apiUsage"] = created.createOneObject.id;
+  console.log("+++   object apiUsage created");
+  for (const f of [
+    { name: "usedToday", label: "Used Today", type: "NUMBER" },
+    { name: "usedMonth", label: "Used This Month", type: "NUMBER" },
+    { name: "usedTotal", label: "Used Total", type: "NUMBER" },
+    { name: "freeLimit", label: "Free Limit", type: "TEXT" },
+  ])
+    await gql("metadata",
+      `mutation { createOneField(input:{field:{name:"${f.name}", label:"${f.label}", type:${f.type}, objectMetadataId:"${objId["apiUsage"]}"}}) { id } }`);
+  console.log("+++   apiUsage fields created");
+}
+
 // Repoint the opportunity kanban stages at our outreach states.
 try {
   const fields = await gql("metadata",

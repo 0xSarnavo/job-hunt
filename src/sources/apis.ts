@@ -1,4 +1,5 @@
 import { getJson, postJson } from "../http.ts";
+import { track } from "../usage.ts";
 import type { JobSource } from "./source.ts";
 import type { Posting, Profile } from "../types.ts";
 import { stripHtml } from "./feeds.ts";
@@ -12,6 +13,7 @@ export const adzuna: JobSource = {
     if (!id || !key) return [];
     const out: Posting[] = [];
     for (const rt of profile.role_titles.slice(0, Number(process.env.ADZUNA_QUERIES ?? 6))) {
+      track("adzuna");
       const d = await getJson(
         `https://api.adzuna.com/v1/api/jobs/in/search/1?app_id=${id}&app_key=${key}` +
           `&results_per_page=50&what_phrase=${encodeURIComponent(rt)}` +
@@ -40,6 +42,7 @@ export const jooble: JobSource = {
     if (!key) return [];
     const out: Posting[] = [];
     for (const rt of profile.role_titles.slice(0, Number(process.env.JOOBLE_QUERIES ?? 2))) {
+      track("jooble");
       const d = await postJson(`https://jooble.org/api/${key}`, {
         keywords: rt,
         location: "remote",

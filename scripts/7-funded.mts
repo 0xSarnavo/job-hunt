@@ -11,7 +11,7 @@
 //
 // Knobs:
 const MODEL = "opencode/mimo-v2.5-free";
-const MAX_NEW_COMPANIES = 8; // per run
+const MAX_NEW_COMPANIES = Number(process.env.FUNDED_MAX ?? 8); // per run
 const FEEDS = [
   "https://techcrunch.com/category/venture/feed/",
   "https://entrackr.com/feed",
@@ -55,6 +55,7 @@ const parser = new Parser();
 let candidates = 0, qualified = 0;
 outer:
 for (const feed of FEEDS) {
+  const feedHost = new URL(feed).host.replace(/^www\./, ""); // marks WHERE a company came from
   let items;
   try { items = (await parser.parseURL(feed)).items ?? []; } catch { continue; }
   for (const item of items) {
@@ -91,9 +92,9 @@ for (const feed of FEEDS) {
     const fundingNote = `${f.amount ?? "?"} ${f.round ?? ""} · total ${org.funding_total ?? "?"} · ${org.industry ?? ""}`.trim();
     db.prepare(
       `INSERT INTO companies (domain, name, stage, funding, headcount, source, pitch)
-       VALUES (?, ?, ?, ?, ?, 'funded-rss', 1)
-       ON CONFLICT(domain) DO UPDATE SET pitch=1, stage=excluded.stage, funding=excluded.funding, headcount=excluded.headcount`,
-    ).run(domain, f.company, org.funding_stage, fundingNote, org.headcount);
+       VALUES (?, ?, ?, ?, ?, ?, 1)
+       ON CONFLICT(domain) DO UPDATE SET pitch=1, stage=excluded.stage, funding=excluded.funding, headcount=excluded.headcount, source=excluded.source`,
+    ).run(domain, f.company, org.funding_stage, fundingNote, org.headcount, `funded:${feedHost}`);
 
     // Careers check: which ATS, any live roles? Good ones become scored jobs;
     // the pitch card links to the best role, else the careers page.
@@ -120,7 +121,7 @@ for (const feed of FEEDS) {
     let companyId = cacheGet(db, compKey)?.id;
     if (!companyId) {
       const created = await twenty("POST", "companies", {
-        name: f.company, actor, signalSource: "funded-rss",
+        name: f.company, actor, signalSource: `funded:${feedHost}`,
         fundingNote,
         employees: org.headcount,
         domainName: { primaryLinkUrl: `https://${domain}` },

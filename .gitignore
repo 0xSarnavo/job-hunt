@@ -9,3 +9,4 @@ profile.yaml
 *.db-shm
 gmail-token.json
 gmail-credentials.json
+.firecrawl/

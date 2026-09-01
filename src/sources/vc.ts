@@ -12,9 +12,12 @@ import type { Posting, Profile } from "../types.ts";
 // Each entry is one fetch+parse (~40s). Queries come from the profile's top
 // role titles; VC_QUERIES caps how many per board per run.
 
-const BOARDS = [
-  { board: "a16z", make: (q: string) => `https://jobs.a16z.com/jobs?q=${encodeURIComponent(q)}` },
-  // add more boards as one-liners, e.g. Sequoia/Lightspeed once their URL scheme is probed
+// urls(queries) returns the pages to fetch: search-driven boards map each
+// query to a URL; fixed-page boards (YC role pages) ignore the queries.
+const BOARDS: { board: string; urls: (queries: string[]) => string[] }[] = [
+  { board: "a16z", urls: (qs) => qs.map((q) => `https://jobs.a16z.com/jobs?q=${encodeURIComponent(q)}`) },
+  { board: "yc", urls: () => ["https://www.ycombinator.com/jobs/role/marketing"] },
+  // more boards are one line each once their URL scheme is probed (Sequoia, Whiteboard Advisors, ...)
 ];
 
 const Parsed = z.object({
@@ -45,9 +48,9 @@ export function makeVcSource(db?: Database.Database): JobSource {
       const nQueries = Number(process.env.VC_QUERIES ?? 4);
       const out: Posting[] = [];
       for (const b of BOARDS) {
-        for (const q of profile.role_titles.slice(0, nQueries)) {
+        for (const url of b.urls(profile.role_titles.slice(0, nQueries))) {
           let page;
-          try { page = tinyfishFetch(b.make(q)); } catch { continue; }
+          try { page = tinyfishFetch(url); } catch { continue; }
           if (page.text.length < 500) continue;
           let parsed;
           try {
@@ -63,7 +66,7 @@ export function makeVcSource(db?: Database.Database): JobSource {
               source: `vc:${b.board}`,
               company: j.company,
               title: j.title,
-              url: link ?? `${b.make(q)}#${companySlug}`,
+              url: link ?? `${url}#${companySlug}`,
               location: j.location ?? "",
               remote: /remote/i.test(j.location ?? ""),
               posted_at: j.posted_days_ago != null

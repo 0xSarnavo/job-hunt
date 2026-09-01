@@ -189,5 +189,15 @@ for (const p of marked) {
     fetchEmail: "DONE",
   });
   if (comp && r) await twenty("PATCH", `companies/${p.companyId}`, { research: `${r.summary}\nAngles: ${r.angles.join(" | ")}` });
+
+  // Reminder chain (nothing sends automatically — tasks are for YOU):
+  //   +2d: send the draft if you haven't; +7d: follow-up gets drafted by 8-followups.
+  const task = await twenty("POST", "tasks", {
+    title: `Send email: ${name} @ ${company} — then move opp to SENT`,
+    dueAt: new Date(Date.now() + 2 * 86_400_000).toISOString(),
+    status: "TODO",
+  });
+  const taskId = task?.data?.createTask?.id;
+  if (taskId) await twenty("POST", "taskTargets", { taskId, personId: p.id });
 }
 console.log(`\ndrafts in email-drafts/ — skim, edit, then send (Gmail draft step comes later)`);

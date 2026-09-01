@@ -54,6 +54,8 @@ const MODEL: Record<string, FieldSpec[]> = {
     { name: "actor", label: "Actor", type: "TEXT" },
     { name: "jobTitle", label: "Job Title", type: "TEXT" },
     { name: "jobUrl", label: "Job URL", type: "TEXT" },
+    { name: "applyLink", label: "Apply Link", type: "LINKS" },
+    { name: "postedAt", label: "Posted At", type: "DATE_TIME" },
     { name: "matchScore", label: "Match Score", type: "NUMBER" },
     { name: "appliedAt", label: "Applied At", type: "DATE_TIME" },
     { name: "channel", label: "Channel", type: "SELECT", options: `[${[

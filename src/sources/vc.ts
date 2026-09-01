@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { z } from "zod";
 import type Database from "better-sqlite3";
 import { extract } from "../llm.ts";
+import { track } from "../usage.ts";
 import type { JobSource } from "./source.ts";
 import type { Posting, Profile } from "../types.ts";
 
@@ -32,6 +33,7 @@ const Parsed = z.object({
 const EXAMPLE = { jobs: [{ company: "Exa", title: "Developer Advocate", location: "San Francisco, CA", salary: "USD 130,000-230,000 / Year", posted_days_ago: 30 }] };
 
 function tinyfishFetch(url: string): { text: string; links: string[] } {
+  track("tinyfish-fetch");
   const out = execFileSync("tinyfish", ["fetch", "content", "get", "--links", "--format", "markdown", url], {
     encoding: "utf8", timeout: 90_000, maxBuffer: 20_000_000,
   });

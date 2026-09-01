@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type Database from "better-sqlite3";
+import { track } from "./usage.ts";
 
 // The model is deliberately swappable and assumed weak; correctness lives here:
 // schema-constrained prompts, strict validation, retry with the validator's
@@ -14,7 +15,9 @@ import type Database from "better-sqlite3";
 
 export type Tier = "light" | "heavy";
 
-function tierCmd(tier: Tier): string[] {
+function tierCmd(tier: Tier, alt = false): string[] {
+  if (tier === "light" && alt)
+    return (process.env.LLM_LIGHT2 ?? "opencode run -m opencode/ling-3.0-flash-fin-free").split(" ");
   const env = tier === "light" ? process.env.LLM_LIGHT : process.env.LLM_HEAVY;
   if (env) return env.split(" ");
   return tier === "light"
@@ -24,8 +27,9 @@ function tierCmd(tier: Tier): string[] {
 
 const TIMEOUT_MS = 120_000;
 
-export function runLLM(prompt: string, tier: Tier): string {
-  const [cmd, ...args] = tierCmd(tier);
+export function runLLM(prompt: string, tier: Tier, alt = false): string {
+  const [cmd, ...args] = tierCmd(tier, alt);
+  track(cmd === "claude" ? "claude-llm" : "opencode-llm");
   // Prompt as final argument: `opencode run` hangs on piped stdin.
   const res = spawnSync(cmd!, [...args, prompt], {
     encoding: "utf8",
@@ -87,7 +91,9 @@ export function extract<S extends z.ZodType>(
   for (const t of tiers) {
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        const raw = runLLM(prompt, t);
+        // light-tier retries rotate to the second free model — one throttled
+        // model must not sink the batch
+        const raw = runLLM(prompt, t, t === "light" && attempt > 0);
         const value = schema.parse(JSON.parse(pluckJson(raw)));
         db?.prepare(
           "INSERT OR REPLACE INTO lookups (key, provider, result, cost) VALUES (?, ?, ?, 0)",

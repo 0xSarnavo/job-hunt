@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import type Database from "better-sqlite3";
+import { track } from "./usage.ts";
 
 // Shared enrichment helpers. Everything cached forever in `lookups`.
 
@@ -19,6 +20,7 @@ export function companyDomain(db: Database.Database, company: string): string | 
   if (hit) return hit.domain;
   let domain: string | null = null;
   try {
+    track("tinyfish-search");
     const out = execFileSync("tinyfish", ["search", "query", `${company} official website`], { encoding: "utf8", timeout: 60_000 });
     const m = out.match(/https?:\/\/(?:www\.)?([a-z0-9-]+\.[a-z.]{2,10})\//i);
     if (m && !/linkedin|wikipedia|crunchbase|twitter|facebook|youtube|github/.test(m[1]!)) domain = m[1]!;
@@ -44,6 +46,7 @@ export async function apolloEnrich(db: Database.Database, domain: string): Promi
   const apiKey = process.env.APOLLO_API_KEY;
   if (!apiKey) return null;
   try {
+    track("apollo");
     const res = await fetch(`https://api.apollo.io/api/v1/organizations/enrich?domain=${domain}`, {
       headers: { "X-Api-Key": apiKey }, signal: AbortSignal.timeout(20_000),
     });

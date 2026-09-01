@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import type Database from "better-sqlite3";
 import { get, getJson, getText } from "./http.ts";
 import type { AtsKind } from "./sources/ats.ts";
+import { track } from "./usage.ts";
 
 // The detection ladder (TOOLING step 2, reshaped by the §0 reality check):
 //   rung 1 — slug guesses against public board APIs, org-name VERIFIED
@@ -75,6 +76,7 @@ async function careersHtml(domain: string, rendered: boolean): Promise<string> {
   const fetchPage = async (url: string): Promise<string> => {
     if (!rendered) return (await getText(url)) ?? "";
     try {
+      track("tinyfish-fetch");
       const { execFileSync } = await import("node:child_process");
       const out = execFileSync("tinyfish", ["fetch", "content", "get", "--format", "html", url], {
         encoding: "utf8", timeout: 60_000, maxBuffer: 20_000_000,

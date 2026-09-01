@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { track } from "./usage.ts";
 
 // One-way sync: SQLite (system of record) → Twenty (viewing layer).
 // Matched jobs become opportunities on the QUEUED→CLOSED kanban with their
@@ -10,6 +11,7 @@ async function twenty(path: string, method: string, body?: unknown): Promise<any
   const url = process.env.TWENTY_URL, key = process.env.TWENTY_API_KEY;
   if (!url || !key) return null;
   await new Promise((r) => setTimeout(r, 700)); // Twenty limit: 100 req/min
+  track("twenty-api");
   const res = await fetch(`${url}/rest/${path}`, {
     method,
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -27,7 +29,9 @@ export async function syncToCrm(db: Database.Database): Promise<{ pushed: number
   const actor = process.env.JOBHUNT_ACTOR || "unknown";
   const jobs = db.prepare(
     `SELECT url, company, title, location, posted_at, exp_required, llm_score, llm_reason, match_score, source FROM jobs
-     WHERE rejected IS NULL AND match_score >= ? ORDER BY match_score DESC`,
+     WHERE rejected IS NULL AND match_score >= ?
+       AND (llm_score IS NULL OR llm_score >= 50)  -- free-model judge gets a veto once it has judged
+     ORDER BY match_score DESC`,
   ).all(MIN_SCORE) as any[];
 
   const cached = new Set(

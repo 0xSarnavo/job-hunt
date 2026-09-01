@@ -48,13 +48,20 @@ https://api.lever.co/v0/postings/{company}
 https://api.ashbyhq.com/posting-api/job-board/{name}
 ```
 
-Recently funded startups are overwhelmingly on one of these three. So the hiring check is:
-resolve company → detect ATS (fetch the careers page, match the embed URL) → hit the board
-JSON. Authoritative, zero cost, zero lag, and it returns the *actual open roles* — which is
-exactly the material a personalised mail needs. This is also a **first-class job source for
-motion A**, not merely a check for motion B.
+So the hiring check is: resolve company → detect ATS (fetch the careers page, match the embed
+URL) → hit the board JSON. Authoritative, zero cost, zero lag, and it returns the *actual open
+roles* — which is exactly the material a personalised mail needs. This is also a **first-class
+job source for motion A**, not merely a check for motion B.
 
-Build the ATS resolver early. It is the highest-value component in the system.
+**Tested 1 Sep 2026** (TOOLING.md §0): "overwhelmingly on one of these three" holds only for
+US early-stage software (~40–70%). For the Entrackr feed it is 1 in 20 — Indian startups sit
+on Zoho Recruit, Keka, MyNextHire, first-party pages, or nothing. The resolver is therefore a
+detection *ladder* — big-3 slug probe → careers-page signature grep → extended adapters
+(Workable, SmartRecruiters, India ATSes) → rendered fallback — and every slug hit must be
+org-name-verified before it enters the DB (slugs collide).
+
+Build the ATS resolver early. It is the highest-value component in the system — for the
+US/remote-global slice. For India it degrades gracefully into the careers-page scraper.
 
 ---
 
@@ -267,4 +274,7 @@ of §0.
 - **Port 25** is blocked on most cloud hosts. Run verification locally.
 - **Scrape sources rot.** Every tier-2 source will break eventually. Budget the maintenance or drop them.
 - **GDPR** applies if targeting the EU or UK. Decide the position before step 9, not after.
+- **Geography also decides resolver coverage** (TOOLING.md §0): remote-global works on the
+  big-3 JSON boards as designed; India-first pushes motion B onto careers scraping and India
+  ATS adapters, and moves the tier-2 scrape sources up the build order.
 - **LinkedIn account loss** in `--mode=auto`. Which is precisely why it is not the default.

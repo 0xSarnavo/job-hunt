@@ -2,7 +2,7 @@
 // each marked with WHERE it came from (funded:techcrunch.com etc).
 // Pure DB aggregation — no Claude anywhere in this path; if an LLM is ever
 // added here, it must stay on OpenCode free models (LLM_LIGHT).
-// Output: connect-list.md (regenerated each run).
+// Output: data/connect-list.md (regenerated each run).
 
 import { writeFileSync } from "node:fs";
 import { openDb } from "../src/db.ts";
@@ -30,5 +30,5 @@ for (const c of companies) {
   for (const p of people) md += `| ${p.name} | ${p.title} | ${p.persona_tier} | ${p.linkedin} |\n`;
 }
 
-writeFileSync("connect-list.md", md);
-console.log(`connect-list.md: ${companies.length} funded companies, ${db.prepare("SELECT count(*) n FROM people WHERE lower(company) IN (SELECT lower(name) FROM companies WHERE pitch=1)").pluck().get()} people`);
+writeFileSync("data/connect-list.md", md);
+console.log(`data/connect-list.md: ${companies.length} funded companies, ${db.prepare("SELECT count(*) n FROM people WHERE lower(company) IN (SELECT lower(name) FROM companies WHERE pitch=1)").pluck().get()} people`);

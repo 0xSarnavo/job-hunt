@@ -1,11 +1,15 @@
 import Database from "better-sqlite3";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const VERSION = 5;
+const VERSION = 6;
 
-export function openDb(path = "jobhunt.db"): Database.Database {
+// Everything generated lives under data/ (gitignored — the repo is public).
+export const DB_PATH = process.env.JOBHUNT_DB ?? "data/jobhunt.db";
+
+export function openDb(path = DB_PATH): Database.Database {
+  if (path !== ":memory:") mkdirSync(dirname(path) || ".", { recursive: true });
   const db = new Database(path);
   db.pragma("journal_mode = WAL");
   const schema = readFileSync(
@@ -21,6 +25,7 @@ export function openDb(path = "jobhunt.db"): Database.Database {
     db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_people_unique ON people(lower(company), lower(name))");
   if (v > 0 && v < 5)
     db.exec("ALTER TABLE companies ADD COLUMN pitch INTEGER DEFAULT 0");
+  // v6: portfolio_companies table + data/ home — both handled by schema.sql / DB_PATH
   db.pragma(`user_version = ${VERSION}`);
   return db;
 }

@@ -7,12 +7,9 @@ stack: []              # e.g. ["typescript", "go", "postgres"]
 years:                 # e.g. 4
 domains: []            # e.g. ["fintech", "devtools"]
 
-# ranked, best first — decided 1 Sep 2026
+# ranked, best first — e.g. remote-global, india-remote, bengaluru, your-city
 locations:
   - remote-global
-  - india-remote
-  - bengaluru
-  - kolkata
 
 comp_band:             # e.g. { min: 0, currency: "INR" }
 dealbreakers: []       # hard filters, e.g. ["crypto", "onsite-only"]

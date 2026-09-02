@@ -97,16 +97,26 @@ export function score(p: Posting, profile: Profile): Verdict {
     && !/india|worldwide|global|anywhere/i.test(loc);
   if (remoteish && usRemote) { locScore = 5; locWhy = "remote(geo?)"; }
   else if (remoteish) { locScore = 20; locWhy = "remote"; }
-  else if (/bengaluru|bangalore/.test(loc)) { locScore = 12; locWhy = "bengaluru"; }
-  else if (/kolkata|calcutta/.test(loc)) { locScore = 10; locWhy = "kolkata"; }
-  else if (/\bindia\b/.test(loc)) { locScore = 8; locWhy = "india"; }
-  else return rejectVerdict("location", `onsite ${p.location}`);
+  else {
+    // onsite: score cities from the profile's ranked locations (best first).
+    // "remote-global" and "<country>-remote" entries are handled above/below.
+    const ALIASES: Record<string, RegExp> = {
+      bengaluru: /bengaluru|bangalore/, kolkata: /kolkata|calcutta/,
+      mumbai: /mumbai|bombay/, delhi: /delhi|gurgaon|gurugram|noida/,
+    };
+    const cities = profile.locations.filter((l) => l !== "remote-global" && !l.endsWith("-remote"));
+    const idx = cities.findIndex((c) => (ALIASES[c] ?? new RegExp(c.replace(/[^a-z0-9]+/gi, ".?"), "i")).test(loc));
+    const country = profile.locations.find((l) => l.endsWith("-remote"))?.replace(/-remote$/, "");
+    if (idx >= 0) { locScore = Math.max(12 - idx * 2, 6); locWhy = cities[idx]!; }
+    else if (country && new RegExp(`\\b${country}\\b`, "i").test(loc)) { locScore = 8; locWhy = country; }
+    else return rejectVerdict("location", `onsite ${p.location}`);
+  }
 
   // --- freshness bonus 0–10 ---
   let fresh = 0;
   if (p.posted_at && (Date.now() - Date.parse(p.posted_at)) / 86_400_000 <= 14) fresh = 10;
 
-  // --- experience ask: mark, never reject (user has 2.5y, stretch 3) ---
+  // --- experience ask: mark, never reject (stretch = profile.years + 0.5) ---
   // Unstated asks are implied by title seniority ("Senior PMM" ≈ 5y,
   // "Head of/Director" ≈ 8y) — the comparison test's second finding.
   const implied =

@@ -29,7 +29,7 @@ import { loadProfile } from "../src/profile.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
 try { process.loadEnvFile(".env"); } catch {}
-process.env.LLM_LIGHT = `opencode run -m ${MODEL}`;
+process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`; // default only — your .env LLM_LIGHT wins
 const actor = process.env.JOBHUNT_ACTOR || "cron";
 const db = openDb();
 const profile = loadProfile();
@@ -41,7 +41,7 @@ const twenty = async (method: string, path: string, body?: unknown) => {
     method, headers: { Authorization: `Bearer ${K}`, "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  return res.ok ? res.json() : null;
+  return res.ok ? res.json() : (console.error(`twenty ${method} ${path}: ${res.status} ${(await res.text()).slice(0, 200)}`), null);
 };
 
 const Funding = z.object({
@@ -123,7 +123,7 @@ for (const feed of FEEDS) {
       const created = await twenty("POST", "companies", {
         name: f.company, actor, signalSource: `funded:${feedHost}`,
         fundingNote,
-        employees: org.headcount,
+        headcount: org.headcount,
         domainName: { primaryLinkUrl: `https://${domain}` },
       });
       companyId = created?.data?.createCompany?.id;

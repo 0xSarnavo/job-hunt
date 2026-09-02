@@ -39,7 +39,8 @@ const MODEL: Record<string, FieldSpec[]> = {
       opt("SMARTRECRUITERS", "SmartRecruiters", "turquoise", 4), opt("OTHER", "Other", "yellow", 5),
       opt("NONE_FOUND", "None found", "gray", 6)].join(",")}]` },
     { name: "signalSource", label: "Signal Source", type: "TEXT", description: "where we first saw this company (entrackr, hn, remotive, ...)" },
-    { name: "research", label: "Research", type: "TEXT", description: "what they do + what Sarnavo can do for them (step 6 output)" },
+    { name: "research", label: "Research", type: "TEXT", description: "what they do + what the candidate can do for them (step 6 output)" },
+    { name: "headcount", label: "Headcount", type: "NUMBER", description: "employee count (Apollo enrich / YC directory team size)" },
   ],
   person: [
     { name: "actor", label: "Actor", type: "TEXT" },
@@ -81,10 +82,59 @@ const STAGE_OPTIONS = `[${[
   opt("CLOSED", "Closed", "red", 6)].join(",")}]`;
 
 const objects = await gql("metadata",
-  `query { objects(paging:{first:60}) { edges { node { id nameSingular isActive } } } }`);
+  `query { objects(paging:{first:100}) { edges { node { id nameSingular isActive } } } }`);
 const objId: Record<string, string> = {};
 for (const e of objects.objects.edges)
   if (e.node.isActive) objId[e.node.nameSingular] = e.node.id;
+
+// --- custom objects: the CRM's five-object model is
+//     Job Portals / Investor Portfolios / Companies / People / Opportunities
+//     (+ API Usage as an ops sidecar). Created idempotently here; their
+//     fields ride the same MODEL loop below.
+const CUSTOM_OBJECTS = [
+  { nameSingular: "jobPortal", namePlural: "jobPortals", labelSingular: "Job Portal", labelPlural: "Job Portals",
+    icon: "IconWorldSearch", description: "every place the pipeline pulls job postings or funding signals from (src/registry.ts)" },
+  { nameSingular: "investorPortfolio", namePlural: "investorPortfolios", labelSingular: "Investor Portfolio", labelPlural: "Investor Portfolios",
+    icon: "IconBuildingBank", description: "accelerators & VC programs whose member companies we track (YC, a16z, ...)" },
+];
+for (const o of CUSTOM_OBJECTS) {
+  if (objId[o.nameSingular]) { console.log(`ok    object ${o.nameSingular} (exists)`); continue; }
+  const created = await gql("metadata",
+    `mutation { createOneObject(input:{object:{
+      nameSingular:"${o.nameSingular}", namePlural:"${o.namePlural}",
+      labelSingular:"${o.labelSingular}", labelPlural:"${o.labelPlural}",
+      icon:"${o.icon}", description:${JSON.stringify(o.description)}
+    }}) { id } }`);
+  objId[o.nameSingular] = created.createOneObject.id;
+  console.log(`+++   object ${o.nameSingular} created`);
+}
+
+MODEL.jobPortal = [
+  { name: "actor", label: "Actor", type: "TEXT" },
+  { name: "portalUrl", label: "Portal URL", type: "LINKS" },
+  { name: "kind", label: "Kind", type: "SELECT", options: `[${[
+    opt("ATS_API", "ATS API", "blue", 0), opt("FEED", "Feed", "green", 1),
+    opt("AGGREGATOR_API", "Aggregator API", "sky", 2), opt("VC_BOARD", "VC Board", "purple", 3),
+    opt("FUNDING_RSS", "Funding RSS", "yellow", 4), opt("SCRAPE", "Scrape", "orange", 5)].join(",")}]` },
+  { name: "status", label: "Status", type: "SELECT", options: `[${[
+    opt("ACTIVE", "Active", "green", 0), opt("PLANNED", "Planned", "yellow", 1),
+    opt("LATER", "Later", "gray", 2)].join(",")}]` },
+  { name: "whatItGives", label: "What It Gives", type: "TEXT" },
+  { name: "sourceSlug", label: "Source Slug", type: "TEXT", description: "matches jobs.source / companies.source prefixes in SQLite" },
+  { name: "jobsIngested", label: "Jobs Ingested", type: "NUMBER", description: "rows in the local jobs table from this portal" },
+];
+MODEL.investorPortfolio = [
+  { name: "actor", label: "Actor", type: "TEXT" },
+  { name: "kind", label: "Kind", type: "SELECT", options: `[${[
+    opt("ACCELERATOR", "Accelerator", "purple", 0), opt("VC", "VC", "blue", 1)].join(",")}]` },
+  { name: "portfolioUrl", label: "Portfolio URL", type: "LINKS" },
+  { name: "jobsBoardUrl", label: "Jobs Board URL", type: "LINKS" },
+  { name: "scrapeStatus", label: "Scrape Status", type: "SELECT", options: `[${[
+    opt("SCRAPED", "Scraped", "green", 0), opt("PLANNED", "Planned", "yellow", 1)].join(",")}]` },
+  { name: "companiesTracked", label: "Companies Tracked", type: "NUMBER", description: "rows in local portfolio_companies for this program" },
+  { name: "companiesInCrm", label: "Companies In CRM", type: "NUMBER", description: "how many of those were pushed as CRM Companies" },
+  { name: "notes", label: "Notes", type: "TEXT" },
+];
 
 for (const [obj, fields] of Object.entries(MODEL)) {
   const id = objId[obj];
@@ -123,6 +173,61 @@ if (!objId["apiUsage"]) {
     await gql("metadata",
       `mutation { createOneField(input:{field:{name:"${f.name}", label:"${f.label}", type:${f.type}, objectMetadataId:"${objId["apiUsage"]}"}}) { id } }`);
   console.log("+++   apiUsage fields created");
+}
+
+// Relation: Company → Investor Portfolio (MANY_TO_ONE; portfolio side shows "Companies").
+try {
+  const compFields = await gql("metadata",
+    `query { object(id:"${objId.company}") { fields(paging:{first:200}) { edges { node { name } } } } }`);
+  const haveRel = compFields.object.fields.edges.some((e: any) => e.node.name === "investorPortfolio");
+  if (haveRel) console.log("ok    company.investorPortfolio relation (exists)");
+  else {
+    await gql("metadata",
+      `mutation { createOneField(input:{field:{
+        name:"investorPortfolio", label:"Investor Portfolio", type:RELATION, icon:"IconBuildingBank",
+        objectMetadataId:"${objId.company}",
+        relationCreationPayload:{
+          type:"MANY_TO_ONE",
+          targetObjectMetadataId:"${objId.investorPortfolio}",
+          targetFieldLabel:"Companies",
+          targetFieldIcon:"IconBuildingSkyscraper"
+        }
+      }}) { id } }`);
+    console.log("+++   company.investorPortfolio relation created");
+  }
+} catch (err) {
+  console.log(`warn  relation company→investorPortfolio failed: ${String(err).slice(0, 300)}`);
+}
+
+// Deactivate what the five-object model doesn't use (reversible in Settings →
+// Data model). Objects: notes are unused; tasks stay (6-emails/8-followups
+// create them). Fields: sales-CRM leftovers on our repurposed objects.
+const DEACTIVATE_FIELDS: [string, string][] = [
+  ["company", "annualRevenue"],
+  ["opportunity", "amount"],
+  ["opportunity", "closeDate"],
+];
+for (const [obj, fieldName] of DEACTIVATE_FIELDS) {
+  try {
+    const fields = await gql("metadata",
+      `query { object(id:"${objId[obj]}") { fields(paging:{first:200}) { edges { node { id name isActive } } } } }`);
+    const f = fields.object.fields.edges.find((e: any) => e.node.name === fieldName)?.node;
+    if (!f || !f.isActive) { console.log(`ok    ${obj}.${fieldName} already inactive/absent`); continue; }
+    await gql("metadata",
+      `mutation { updateOneField(input:{id:"${f.id}", update:{isActive:false}}) { id } }`);
+    console.log(`---   ${obj}.${fieldName} deactivated`);
+  } catch (err) {
+    console.log(`warn  could not deactivate ${obj}.${fieldName}: ${String(err).slice(0, 150)}`);
+  }
+}
+try {
+  if (objId.note) {
+    await gql("metadata",
+      `mutation { updateOneObject(input:{id:"${objId.note}", update:{isActive:false}}) { id } }`);
+    console.log("---   object note deactivated (unused)");
+  }
+} catch (err) {
+  console.log(`warn  could not deactivate note object: ${String(err).slice(0, 150)}`);
 }
 
 // Repoint the opportunity kanban stages at our outreach states.

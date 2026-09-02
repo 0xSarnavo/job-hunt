@@ -10,10 +10,11 @@ const MIN_RUBRIC = 40;   // don't spend model time below this
 import { z } from "zod";
 import { openDb } from "../src/db.ts";
 import { extract } from "../src/llm.ts";
+import { loadProfile, profileBrief } from "../src/profile.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
 try { process.loadEnvFile(".env"); } catch {}
-process.env.LLM_LIGHT = `opencode run -m ${MODEL}`;
+process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`; // default only — your .env LLM_LIGHT wins
 
 const Fit = z.object({
   score: z.number().min(0).max(100),
@@ -21,7 +22,8 @@ const Fit = z.object({
 });
 const EXAMPLE = { score: 62, reason: "DevRel role at AI devtools startup, remote-global, asks 3y vs 2.5y — strong fit." };
 
-const PROFILE = `Candidate: 2.5 years (stretch 3). Target roles: developer advocate/relations, GTM engineer, growth engineer, product/developer/ecosystem/growth marketing, marketing ops, developer experience. Domains: AI, devtools, infra (web3-devtools ok, consumer crypto NO). Location: remote-global > india-remote > bengaluru > kolkata; US/EU-restricted remote or other onsite = unsuitable. Dealbreakers: memecoin/gambling, equity-only, pure performance/content/lead-gen marketing, recruiter/sales roles.`;
+// Judge context comes from YOUR profile.yaml — nothing personal is hardcoded here.
+const PROFILE = profileBrief(loadProfile());
 
 const db = openDb();
 const jobs = db.prepare(

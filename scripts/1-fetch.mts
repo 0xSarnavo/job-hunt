@@ -20,7 +20,7 @@ import { makeVcSource } from "../src/sources/vc.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
 try { process.loadEnvFile(".env"); } catch {}
-Object.assign(process.env, KNOBS);
+for (const [k, v] of Object.entries(KNOBS)) process.env[k] ??= v; // defaults only — your .env wins
 
 const profile = loadProfile();
 const db = openDb();

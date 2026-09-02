@@ -1,4 +1,7 @@
 import Database from "better-sqlite3";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import { DB_PATH } from "./db.ts";
 
 // API usage ledger — every metered/limited vendor call increments a counter.
 // Surfaced in the CRM by scripts/10-usage-sync.mts. Uses its own connection so
@@ -22,7 +25,8 @@ export const LIMITS: Record<string, string> = {
 let _db: Database.Database | null = null;
 function ledger(): Database.Database {
   if (!_db) {
-    _db = new Database("jobhunt.db");
+    mkdirSync(dirname(DB_PATH) || ".", { recursive: true });
+    _db = new Database(DB_PATH);
     _db.pragma("journal_mode = WAL");
     _db.exec(`CREATE TABLE IF NOT EXISTS usage (
       vendor TEXT NOT NULL,

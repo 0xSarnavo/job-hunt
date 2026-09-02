@@ -35,35 +35,49 @@ Every external dependency is optional and degrades gracefully:
 ```
 docs/        PLAN.md (the spec) · SOURCES.md (where jobs come from) · TOOLING.md (per-step tools)
 src/         shared library — db, llm, scoring, resolver, sources/, CRM setup & sync, registry
-scripts/     the pipeline, numbered in run order (1-fetch → 12-portfolios) + run-daily.sh
-data/        EVERYTHING generated & personal (gitignored): jobhunt.db, cv-briefs/, reports
+scripts/     the pipeline, numbered steps + run-daily.sh (canonical run order lives there)
+data/        EVERYTHING generated & personal (gitignored): jobhunt.db, cv-briefs/, email-drafts/,
+             connect-list.md, portfolio-companies.md, PENDING.md (what's left undone and why)
 profile.yaml YOUR profile (gitignored) — copy profile.example.yaml
 .env         YOUR keys (gitignored) — copy .env.example
 ```
 
-## The pipeline (scripts/, in run order)
+## The pipeline (run order = `scripts/run-daily.sh`)
 
+**Signals in**
 | step | what it does |
 |---|---|
-| 1-fetch | pulls postings from every configured job portal into SQLite |
+| 1-fetch | pulls postings from every configured job portal (incl. boards you add in the CRM) |
+| 7-funded | funding RSS (US · EU · UK · India · AU) → enrich → 5–50 headcount pitch targets |
+| 11-vc-companies | newest YC batches → active pitch targets |
+| 12-portfolios | investor programs (YC, a16z, Bangalore Startup Map, CRM-added) + their companies → CRM |
+| 13-careers | portfolio companies' careers pages → ATS detected, live matching roles → Opportunities |
+
+**Judge + prep**
+| step | what it does |
+|---|---|
 | 2-llm-score | free-model judge re-scores the rule-based matches |
 | 3-cv-briefs | writes a CV-tailoring brief per double-passed job → `data/cv-briefs/` |
 | 4-sync | pushes matched jobs to the CRM (Companies + Opportunities kanban) |
-| 7-funded | funding RSS → enrich → 5–50 headcount pitch targets |
-| 11-vc-companies | newest YC batches → active pitch targets |
+
+**People + outreach (nothing sends itself)**
+| step | what it does |
+|---|---|
 | 5-people | finds founders/hiring managers per company, drafts LinkedIn notes |
 | 6-emails | email waterfall for people YOU marked `Fetch Email = YES` in the CRM |
 | 8-followups | drafts follow-ups for stale SENT cards |
 | 9-connect-list | regenerates `data/connect-list.md` — who to connect with today |
-| 12-portfolios | investor programs (YC, a16z, Bangalore Startup Map, ...) + their companies → CRM |
-| 13-careers | portfolio companies' careers pages → ATS detected, live matching roles → Opportunities |
-| 10-usage-sync | per-vendor API usage counters → CRM |
+
+**Bookkeeping**: 10-usage-sync pushes per-vendor API-usage counters to the CRM, and steps that
+stop at a cap or quota write what's left (and why) to `data/PENDING.md`.
 
 ## The CRM model (Twenty)
 
 Five objects, created by `npm run setup-crm`:
 
-1. **Job Portals** — every place the pipeline pulls postings/signals from (registry: `src/registry.ts`)
+1. **Job Portals** — every place the pipeline pulls postings/signals from (registry: `src/registry.ts`).
+   Status legend: *Active* = fetched on every run · *Planned* = adapter exists, flip the status to
+   start it · *Later* = blocked on something real (login walls, account risk — see SOURCES.md)
 2. **Investor Portfolios** — accelerators & VC programs (YC, a16z, Sequoia, ...) with scrape status
 3. **Companies** — scraped from job portals and investor portfolios, linked to their portfolio
 4. **People** — per company, tiered (founder / hiring manager / peer / recruiter) with drafted notes
@@ -78,8 +92,8 @@ are Gmail drafts you review and send yourself. See `docs/PLAN.md` §6–7 for wh
 
 **Add a job board — from the CRM.** Create a Job Portal record with Kind = *VC Board*,
 Status = *Active*, and a Portal URL. The next `1-fetch` run fetches that page, parses the
-listings with the free model, and scores them like any other source. (The Planned Sequoia /
-Lightspeed board records are one status-flip away.)
+listings with the free model, and scores them like any other source. Any *Planned* board
+starts the same way — just flip its Status to Active.
 
 **Add an investor program — from the CRM.** Create an Investor Portfolio record with a
 Portfolio URL. The next `12-portfolios` run fetches the page, extracts the company list

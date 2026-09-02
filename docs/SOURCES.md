@@ -25,8 +25,8 @@ Every source below feeds the same pipeline. Status says what it needs before it 
 | Jooble | widest country coverage | free API key | **free signup needed** |
 | Company careers pages | jobs from companies not on any board above | TinyFish Fetch (renders the page), Firecrawl as backup | **key in .env** |
 | YC Work at a Startup | startup jobs + funding stage | TinyFish/Firecrawl fetch | **key in .env** |
-| VC portfolio boards (a16z live; Sequoia/Lightspeed = config lines away) | every company is funded by definition + live jobs + salary + headcount — motion B pre-packaged | TinyFish render → free-model parse (`src/sources/vc.ts`); a16z supports `?q=` search and link-matching recovers direct ATS apply URLs | **fetching (1 Sep 2026)** |
-| Wellfound | startup jobs | heavy anti-bot; Firecrawl, test cheaply first | **key in .env** |
+| VC portfolio boards (a16z, YC, Sequoia, Lightspeed live; add more from the CRM) | every company is funded by definition + live jobs + salary + headcount — motion B pre-packaged | TinyFish render → free-model parse (`src/sources/vc.ts`); CRM Job Portals with Kind=VC Board & Status=Active are fetched too | **fetching** |
+| Wellfound | startup jobs | heavy anti-bot (plain fetches 404); costs Firecrawl credits per page and mostly duplicates the YC/portfolio coverage — parked deliberately | **later** |
 | Naukri / Instahyre / Cutshort | India volume | login-walled scraping | **later** |
 | Otta / Welcome to the Jungle | curated startup jobs, good matching | login-walled scraping | **later** |
 | LinkedIn Jobs | best people-linkage | your own browser session only | **later** |

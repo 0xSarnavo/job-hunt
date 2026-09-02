@@ -115,7 +115,8 @@ MODEL.jobPortal = [
   { name: "kind", label: "Kind", type: "SELECT", options: `[${[
     opt("ATS_API", "ATS API", "blue", 0), opt("FEED", "Feed", "green", 1),
     opt("AGGREGATOR_API", "Aggregator API", "sky", 2), opt("VC_BOARD", "VC Board", "purple", 3),
-    opt("FUNDING_RSS", "Funding RSS", "yellow", 4), opt("SCRAPE", "Scrape", "orange", 5)].join(",")}]` },
+    opt("FUNDING_RSS", "Funding RSS", "yellow", 4), opt("SCRAPE", "Scrape", "orange", 5),
+    opt("COMPANY_BOARD", "Company Board", "turquoise", 6)].join(",")}]` },
   { name: "status", label: "Status", type: "SELECT", options: `[${[
     opt("ACTIVE", "Active", "green", 0), opt("PLANNED", "Planned", "yellow", 1),
     opt("LATER", "Later", "gray", 2)].join(",")}]` },
@@ -126,7 +127,8 @@ MODEL.jobPortal = [
 MODEL.investorPortfolio = [
   { name: "actor", label: "Actor", type: "TEXT" },
   { name: "kind", label: "Kind", type: "SELECT", options: `[${[
-    opt("ACCELERATOR", "Accelerator", "purple", 0), opt("VC", "VC", "blue", 1)].join(",")}]` },
+    opt("ACCELERATOR", "Accelerator", "purple", 0), opt("VC", "VC", "blue", 1),
+    opt("DIRECTORY", "Directory", "green", 2)].join(",")}]` },
   { name: "portfolioUrl", label: "Portfolio URL", type: "LINKS" },
   { name: "jobsBoardUrl", label: "Jobs Board URL", type: "LINKS" },
   { name: "scrapeStatus", label: "Scrape Status", type: "SELECT", options: `[${[
@@ -199,6 +201,25 @@ try {
   console.log(`warn  relation company→investorPortfolio failed: ${String(err).slice(0, 300)}`);
 }
 
+// Keep SELECT options of existing fields in sync with the MODEL above
+// (createOneField only runs for missing fields — new options need an update).
+for (const [obj, fieldName] of [["jobPortal", "kind"], ["investorPortfolio", "kind"]] as const) {
+  try {
+    const spec = MODEL[obj]!.find((f) => f.name === fieldName)!;
+    const fields = await gql("metadata",
+      `query { object(id:"${objId[obj]}") { fields(paging:{first:200}) { edges { node { id name options } } } } }`);
+    const f = fields.object.fields.edges.find((e: any) => e.node.name === fieldName)?.node;
+    if (!f) continue;
+    const wanted = (spec.options!.match(/value:"([A-Z_]+)"/g) ?? []).length;
+    if ((f.options?.length ?? 0) >= wanted) { console.log(`ok    ${obj}.${fieldName} options up to date`); continue; }
+    await gql("metadata",
+      `mutation { updateOneField(input:{id:"${f.id}", update:{options:${spec.options}}}) { id } }`);
+    console.log(`+++   ${obj}.${fieldName} options refreshed`);
+  } catch (err) {
+    console.log(`warn  could not refresh ${obj}.${fieldName} options: ${String(err).slice(0, 150)}`);
+  }
+}
+
 // Deactivate what the five-object model doesn't use (reversible in Settings →
 // Data model). Objects: notes are unused; tasks stay (6-emails/8-followups
 // create them). Fields: sales-CRM leftovers on our repurposed objects.
@@ -220,14 +241,17 @@ for (const [obj, fieldName] of DEACTIVATE_FIELDS) {
     console.log(`warn  could not deactivate ${obj}.${fieldName}: ${String(err).slice(0, 150)}`);
   }
 }
-try {
-  if (objId.note) {
+// note: unused. workflow/dashboard: Twenty features this pipeline doesn't use —
+// deactivating tidies the sidebar down to the five-object model (+ Tasks, API Usage).
+for (const objName of ["note", "workflow", "dashboard"]) {
+  try {
+    if (!objId[objName]) continue;
     await gql("metadata",
-      `mutation { updateOneObject(input:{id:"${objId.note}", update:{isActive:false}}) { id } }`);
-    console.log("---   object note deactivated (unused)");
+      `mutation { updateOneObject(input:{id:"${objId[objName]}", update:{isActive:false}}) { id } }`);
+    console.log(`---   object ${objName} deactivated (unused)`);
+  } catch (err) {
+    console.log(`warn  could not deactivate ${objName} object: ${String(err).slice(0, 150)}`);
   }
-} catch (err) {
-  console.log(`warn  could not deactivate note object: ${String(err).slice(0, 150)}`);
 }
 
 // Repoint the opportunity kanban stages at our outreach states.

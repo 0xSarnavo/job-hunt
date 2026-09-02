@@ -43,10 +43,16 @@ of the same aggregate view. Same jobs, zero fight.
 
 | Platform | Why | How | Status |
 |---|---|---|---|
-| Entrackr | best India funding tracker | RSS feed | **ready now** |
-| Inc42 Funding Galore | weekly India roundup | RSS feed | **ready now** |
-| YourStory | India startup news | RSS feed | **ready now** |
-| TechCrunch | global funding news | RSS feed | **ready now** |
+| TechCrunch (venture) | global funding news | RSS feed | **fetching** |
+| Crunchbase News | global rounds, high signal | RSS feed | **fetching** |
+| FinSMEs | dedicated daily funding briefs, worldwide | RSS feed | **fetching** |
+| Entrackr | best India funding tracker | RSS feed | **fetching** |
+| Inc42 | India rounds + weekly Funding Galore roundup | RSS feed | **fetching** |
+| Sifted | UK/EU startups (FT-backed) | RSS feed | **fetching** |
+| Tech.eu | EU funding tracker | RSS feed | **fetching** |
+| EU-Startups | EU early-stage rounds | RSS feed | **fetching** |
+| Startup Daily | Australia/NZ rounds | RSS feed | **fetching** |
+| YourStory | India startup news | RSS feed | available |
 
 A funding story gives us a company name → we check its job board (tables above) → if it's
 hiring roles that fit, it becomes a lead.

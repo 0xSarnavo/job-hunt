@@ -12,9 +12,22 @@
 // Knobs:
 const MODEL = "opencode/mimo-v2.5-free";
 const MAX_NEW_COMPANIES = Number(process.env.FUNDED_MAX ?? 8); // per run
+// Funding-news RSS by region. Every article is cached once (no double credits),
+// non-funding titles are filtered before the model sees them — adding feeds is cheap.
 const FEEDS = [
+  // global / US
   "https://techcrunch.com/category/venture/feed/",
+  "https://news.crunchbase.com/feed/",
+  "https://www.finsmes.com/feed",              // dedicated daily funding briefs, worldwide
+  // India
   "https://entrackr.com/feed",
+  "https://inc42.com/feed/",
+  // UK / EU
+  "https://sifted.eu/feed",
+  "https://tech.eu/feed/",
+  "https://www.eu-startups.com/feed/",
+  // Australia / NZ
+  "https://www.startupdaily.net/feed/",
 ];
 
 import Parser from "rss-parser";

@@ -12,4 +12,5 @@ npx tsx scripts/5-people.mts       # people + LinkedIn notes for top companies
 npx tsx scripts/6-emails.mts       # ONLY people you marked Fetch Email=YES
 npx tsx scripts/8-followups.mts    # drafts follow-ups for stale SENT cards
 npx tsx scripts/12-portfolios.mts  # investor programs + portfolio companies -> CRM
+npx tsx scripts/13-careers.mts     # portfolio companies' careers pages -> ATS + matching roles
 npx tsx scripts/10-usage-sync.mts   # API usage -> CRM

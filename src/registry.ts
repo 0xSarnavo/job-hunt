@@ -3,7 +3,7 @@
 //   Investor Portfolios — accelerators & VC programs whose member companies we track
 // scripts/12-portfolios.mts seeds these into Twenty and keeps counts fresh.
 
-export type PortalKind = "ATS_API" | "FEED" | "AGGREGATOR_API" | "VC_BOARD" | "FUNDING_RSS" | "SCRAPE";
+export type PortalKind = "ATS_API" | "FEED" | "AGGREGATOR_API" | "VC_BOARD" | "FUNDING_RSS" | "SCRAPE" | "COMPANY_BOARD";
 export type PortalStatus = "ACTIVE" | "PLANNED" | "LATER";
 
 export interface Portal {
@@ -30,7 +30,7 @@ export const PORTALS: Portal[] = [
   { slug: "jooble", name: "Jooble", url: "https://jooble.org", kind: "AGGREGATOR_API", status: "ACTIVE", gives: "widest country coverage, free API" },
   { slug: "vc:yc", name: "YC Jobs board", url: "https://www.ycombinator.com/jobs", kind: "VC_BOARD", status: "ACTIVE", gives: "YC company jobs by role; every company funded by definition" },
   { slug: "vc:a16z", name: "a16z Jobs board", url: "https://jobs.a16z.com", kind: "VC_BOARD", status: "ACTIVE", gives: "a16z portfolio jobs, searchable, salary + direct ATS links" },
-  { slug: "funded", name: "Funding RSS (TechCrunch + Entrackr)", url: "https://techcrunch.com/category/venture/", kind: "FUNDING_RSS", status: "ACTIVE", gives: "who just raised — feeds motion B (proactive pitches)" },
+  { slug: "funded", name: "Funding RSS bundle", url: "https://techcrunch.com/category/venture/", kind: "FUNDING_RSS", status: "ACTIVE", gives: "who just raised, worldwide: TechCrunch, Crunchbase News, FinSMEs, Entrackr, Inc42, Sifted, Tech.eu, EU-Startups, Startup Daily (AU) — feeds motion B" },
   { slug: "resolver", name: "Company careers pages", url: "https://tinyfish.ai", kind: "SCRAPE", status: "ACTIVE", gives: "rendered careers pages for companies on no known board" },
   { slug: "vc-list:yc", name: "YC directory (yc-oss API)", url: "https://yc-oss.github.io/api", kind: "VC_BOARD", status: "ACTIVE", gives: "latest YC batches as pitch targets, free JSON" },
   { slug: "wellfound", name: "Wellfound", url: "https://wellfound.com", kind: "SCRAPE", status: "PLANNED", gives: "startup jobs; heavy anti-bot, test cheaply first" },
@@ -41,7 +41,7 @@ export const PORTALS: Portal[] = [
   { slug: "linkedin", name: "LinkedIn Jobs", url: "https://www.linkedin.com/jobs", kind: "SCRAPE", status: "LATER", gives: "best people-linkage; own browser session only" },
 ];
 
-export type PortfolioKind = "ACCELERATOR" | "VC";
+export type PortfolioKind = "ACCELERATOR" | "VC" | "DIRECTORY";
 export type ScrapeStatus = "SCRAPED" | "PLANNED";
 
 export interface Portfolio {
@@ -73,4 +73,5 @@ export const PORTFOLIOS: Portfolio[] = [
   { slug: "antler", name: "Antler", kind: "ACCELERATOR", site: "https://www.antler.co", portfolioUrl: "https://www.antler.co/portfolio", scrape: "PLANNED", notes: "has India cohorts" },
   { slug: "entrepreneur-first", name: "Entrepreneur First", kind: "ACCELERATOR", site: "https://www.joinef.com", portfolioUrl: "https://www.joinef.com/companies/", scrape: "PLANNED", notes: "has Bengaluru cohorts" },
   { slug: "blume", name: "Blume Ventures", kind: "VC", site: "https://blume.vc", portfolioUrl: "https://blume.vc/portfolio", scrape: "PLANNED", notes: "India early-stage" },
+  { slug: "blr-map", name: "Bangalore Startup Map", kind: "DIRECTORY", site: "https://www.bangalorestartupmap.com", portfolioUrl: "https://www.bangalorestartupmap.com/", scrape: "SCRAPED", notes: "880+ Bengaluru startups + 70 VCs with stage/sector/founders — geography fit; startups parsed from the page's embedded JSON" },
 ];

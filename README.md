@@ -55,7 +55,8 @@ profile.yaml YOUR profile (gitignored) — copy profile.example.yaml
 | 6-emails | email waterfall for people YOU marked `Fetch Email = YES` in the CRM |
 | 8-followups | drafts follow-ups for stale SENT cards |
 | 9-connect-list | regenerates `data/connect-list.md` — who to connect with today |
-| 12-portfolios | investor programs (YC, a16z, ...) + their portfolio companies → CRM |
+| 12-portfolios | investor programs (YC, a16z, Bangalore Startup Map, ...) + their companies → CRM |
+| 13-careers | portfolio companies' careers pages → ATS detected, live matching roles → Opportunities |
 | 10-usage-sync | per-vendor API usage counters → CRM |
 
 ## The CRM model (Twenty)
@@ -72,3 +73,29 @@ plus **API Usage** — free-tier budget counters per vendor.
 
 Nothing is ever sent automatically: LinkedIn connects are a list you click yourself, and emails
 are Gmail drafts you review and send yourself. See `docs/PLAN.md` §6–7 for why.
+
+## Customizing
+
+**Add a job board — from the CRM.** Create a Job Portal record with Kind = *VC Board*,
+Status = *Active*, and a Portal URL. The next `1-fetch` run fetches that page, parses the
+listings with the free model, and scores them like any other source. (The Planned Sequoia /
+Lightspeed board records are one status-flip away.)
+
+**Add an investor program — from the CRM.** Create an Investor Portfolio record with a
+Portfolio URL. The next `12-portfolios` run fetches the page, extracts the company list
+(best effort — clean directory pages work well), pushes companies with websites into the CRM
+linked to your record, and keeps its counts updated. For sites needing a dedicated parser,
+add an entry in `src/registry.ts` and a scraper block in `scripts/12-portfolios.mts`
+(the YC / a16z / Bangalore-map blocks are the templates).
+
+**Company boards find themselves.** `13-careers` resolves each portfolio company's ATS and
+adds discovered boards as Job Portal records (Kind = *Company Board*) — your personal,
+growing list of boards worth watching.
+
+**What's public vs private.** The registries of portals and programs you follow
+(`src/registry.ts`) are part of the repo. The *results* — companies, people, roles, drafts,
+your profile — live only in `data/`, `profile.yaml`, and your CRM, all gitignored.
+
+**Knobs.** Every script has a "Knobs" block at the top (batch sizes, batches to push,
+models). Env overrides: `LLM_LIGHT` / `LLM_HEAVY` (any prompt-taking CLI), `JOBHUNT_DB`,
+`PORTFOLIO_YC_BATCHES`, `PORTFOLIO_PUSH_MAX`, `CAREERS_PER_RUN`, `VC_QUERIES`.

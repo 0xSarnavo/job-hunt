@@ -114,7 +114,10 @@ export async function resolve(name: string, domain: string | undefined, db: Data
     if (r) fallback ??= r;
   }
   if (!result && domain) result = grepTokens(await careersHtml(domain, false));
-  if (!result && domain && process.env.TINYFISH_API_KEY) {
+  // RESOLVER_MAX_RUNG=2 skips the rendered fallback — it costs 5 TinyFish
+  // fetches per company and (measured 2 Sep 2026, 364 companies) found ~nothing
+  // the free rungs missed. Use it for bulk sweeps.
+  if (!result && domain && process.env.TINYFISH_API_KEY && process.env.RESOLVER_MAX_RUNG !== "2") {
     const r = grepTokens(await careersHtml(domain, true));
     if (r) result = { ...r, rung: 3 };
   }

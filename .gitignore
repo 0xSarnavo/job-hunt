@@ -1,7 +1,17 @@
 node_modules/
-.env
-.env.*
-*.sqlite
-*.db
-.DS_Store
 dist/
+
+# secrets and personal data — never committed (repo is public)
+.env
+profile.yaml
+data/
+.claude/skills/tailor-cv/
+*.db
+*.db-wal
+*.db-shm
+gmail-token.json
+gmail-credentials.json
+.firecrawl/
+cv-briefs/
+email-drafts/
+connect-list.md

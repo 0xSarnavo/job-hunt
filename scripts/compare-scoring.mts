@@ -1,10 +1,11 @@
 // Three-judge comparison on ALREADY-STORED jobs (no fetching):
 // deterministic rubric vs free OpenCode model vs claude -p.
-process.chdir("/Users/sarnavo/orca/workspaces/job-hunt/basslet");
+process.chdir(new URL("..", import.meta.url).pathname);
 process.loadEnvFile(".env");
-process.env.LLM_LIGHT = "opencode run -m opencode/mimo-v2.5-free";
+process.env.LLM_LIGHT ??= "opencode run -m opencode/mimo-v2.5-free";
 const { openDb } = await import("../src/db.ts");
 const { extract } = await import("../src/llm.ts");
+const { loadProfile, profileBrief } = await import("../src/profile.ts");
 const { z } = await import("zod");
 
 const db = openDb();
@@ -31,7 +32,7 @@ const Fit = z.object({
   reason: z.string().max(200),
 });
 
-const PROFILE = `Candidate: 2.5 years (stretch 3) experience. Target roles: developer advocate/relations, GTM engineer, growth engineer, product/developer/ecosystem/growth marketing, marketing ops, developer experience. Domains: AI, devtools, infra (web3-devtools ok, consumer crypto NO). Location: remote-global > india-remote > bengaluru > kolkata; other onsite = unsuitable. Dealbreakers: memecoin/gambling, equity-only, pure performance/content/lead-gen marketing. No comp floor.`;
+const PROFILE = profileBrief(loadProfile());
 
 for (const j of pick) {
   const input = `JOB: ${j.title} @ ${j.company} (${j.location})\n${j.description.slice(0, 1800)}`;

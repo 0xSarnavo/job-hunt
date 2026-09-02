@@ -10,6 +10,7 @@
 
 import { z } from "zod";
 import { openDb } from "../src/db.ts";
+import { loadProfile, profileBrief } from "../src/profile.ts";
 import { extract } from "../src/llm.ts";
 
 const MODEL = process.argv[2] ?? "opencode/mimo-v2.5-free";
@@ -17,11 +18,11 @@ const N = Number(process.argv[3] ?? 12);
 
 process.chdir(new URL("..", import.meta.url).pathname);
 try { process.loadEnvFile(".env"); } catch {}
-process.env.LLM_LIGHT = `opencode run -m ${MODEL}`;
+process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`; // default only — your .env LLM_LIGHT wins
 
 const Fit = z.object({ score: z.number().min(0).max(100), reason: z.string().max(200) });
 const EXAMPLE = { score: 62, reason: "DevRel at AI devtools, remote-global, 3y ask vs 2.5y." };
-const PROFILE = `Candidate: 2.5 years (stretch 3). Target roles: developer advocate/relations, GTM engineer, growth engineer, product/developer/ecosystem/growth marketing, marketing ops, developer experience. Domains: AI, devtools, infra (web3-devtools ok, consumer crypto NO). Location: remote-global > india-remote > bengaluru > kolkata; US/EU-restricted remote or other onsite = unsuitable. Dealbreakers: memecoin/gambling, equity-only, pure performance/content/lead-gen marketing, recruiter/sales roles.`;
+const PROFILE = profileBrief(loadProfile());
 
 const db = openDb();
 // stratified: 1/3 high, 1/3 mid, 1/3 low-or-rejected

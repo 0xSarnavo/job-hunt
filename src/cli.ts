@@ -20,7 +20,7 @@ try {
 const SOURCES: JobSource[] = [remotive, remoteok, arbeitnow, weworkremotely, hnWhoIsHiring, adzuna, jooble];
 
 const program = new Command("jobhunt");
-const todo = (verb: string) => () => console.log(`${verb}: not implemented yet (see TOOLING.md build order)`);
+const todo = (verb: string) => () => console.log(`${verb}: not implemented yet (see docs/TOOLING.md build order)`);
 
 program
   .command("signal")

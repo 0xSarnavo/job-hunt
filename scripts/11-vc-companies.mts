@@ -27,7 +27,7 @@ const twenty = async (method: string, path: string, body?: unknown) => {
     method, headers: { Authorization: `Bearer ${K}`, "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  return res.ok ? res.json() : null;
+  return res.ok ? res.json() : (console.error(`twenty ${method} ${path}: ${res.status} ${(await res.text()).slice(0, 200)}`), null);
 };
 
 let added = 0;
@@ -70,7 +70,7 @@ for (const batch of BATCHES) {
       const created = await twenty("POST", "companies", {
         name: c.name, actor, signalSource: `vc-list:yc-${batch}`,
         fundingStage: "SEED", fundingNote,
-        employees: org?.headcount ?? team,
+        headcount: org?.headcount ?? team,
         domainName: { primaryLinkUrl: `https://${domain}` },
         research: c.one_liner ?? "",
       });

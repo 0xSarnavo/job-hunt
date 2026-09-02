@@ -4,6 +4,8 @@ dist/
 # secrets and personal data — never committed (repo is public)
 .env
 profile.yaml
+data/
+.claude/skills/tailor-cv/
 *.db
 *.db-wal
 *.db-shm

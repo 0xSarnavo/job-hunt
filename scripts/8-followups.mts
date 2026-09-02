@@ -17,10 +17,10 @@ import { cacheGet, cachePut } from "../src/enrich.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
 try { process.loadEnvFile(".env"); } catch {}
-process.env.LLM_LIGHT = `opencode run -m ${MODEL}`;
+process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`; // default only — your .env LLM_LIGHT wins
 const db = openDb();
 const profile = loadProfile();
-mkdirSync("email-drafts", { recursive: true });
+mkdirSync("data/email-drafts", { recursive: true });
 
 const U = process.env.TWENTY_URL!, K = process.env.TWENTY_API_KEY!;
 const twenty = async (method: string, path: string, body?: unknown) => {
@@ -29,7 +29,7 @@ const twenty = async (method: string, path: string, body?: unknown) => {
     method, headers: { Authorization: `Bearer ${K}`, "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  return res.ok ? res.json() : null;
+  return res.ok ? res.json() : (console.error(`twenty ${method} ${path}: ${res.status} ${(await res.text()).slice(0, 200)}`), null);
 };
 
 const sent = (await twenty("GET", `opportunities?filter=stage[eq]:SENT&limit=60`))?.data?.opportunities ?? [];
@@ -48,7 +48,7 @@ for (const o of due) {
       { tier: DRAFT_TIER, retries: 1, escalate: false, db });
   } catch { continue; }
   const slug = (o.name ?? o.id).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
-  writeFileSync(`email-drafts/followup-${slug}.md`,
+  writeFileSync(`data/data/email-drafts/followup-${slug}.md`,
     `# FOLLOW-UP — ${o.name}\n\nSubject: ${draft.subject}\n\n${draft.body}\n\n(after sending: move the card to REPLIED when they answer, or CLOSED after this — one follow-up only)\n`);
   const task = await twenty("POST", "tasks", {
     title: `Send follow-up: ${o.name}`,

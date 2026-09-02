@@ -54,7 +54,7 @@ exactly what TinyFish Fetch + `src/llm.ts` already do, in our language; adding i
 Python runtime for zero new capability, and its hosted API is paid. **CRM: Twenty, selected**
 (decided 1 Sep 2026 — user wants human-facing tracking/stats). Deployed from the Railway
 `twenty-crm` template into project `job-hunt-crm` (server + worker + Postgres + Redis):
-https://your-twenty-instance.example.com — the one paid piece of the stack (Railway
+(instance URL in local .env) — the one paid piece of the stack (Railway
 hosting). Chosen over Comp AI CRM for the mature human UI; the agent side already has SQLite.
 **SQLite remains the system of record** — the CRM is a one-way view: a `sync` CLI verb pushes
 `companies`/`people`/`touches` into Twenty via its REST API (`TWENTY_API_KEY` + `TWENTY_URL`

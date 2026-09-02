@@ -2,7 +2,7 @@
 // The free model does the cheap part per job: pick the base CV variant and
 // list the posting's literal keywords. The actual tailored HTML/PDF is quality
 // work — run /tailor-cv in a Claude session per brief (briefs link everything).
-// Output: cv-briefs/<company>-<slug>.md
+// Output: data/cv-briefs/<company>-<slug>.md
 //
 // Knobs:
 const MODEL = "opencode/mimo-v2.5-free";
@@ -15,7 +15,7 @@ import { extract } from "../src/llm.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
 try { process.loadEnvFile(".env"); } catch {}
-process.env.LLM_LIGHT = `opencode run -m ${MODEL}`;
+process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`; // default only — your .env LLM_LIGHT wins
 
 const VARIANTS = [
   "DevRel", "DX", "PMM", "Developer_Marketing", "Ecosystem_Marketing",
@@ -30,7 +30,7 @@ const Brief = z.object({
 const EXAMPLE = { variant: "DevRel", keywords: ["developer advocacy", "technical content", "API"], title_phrase: "Developer Advocate" };
 
 const db = openDb();
-mkdirSync("cv-briefs", { recursive: true });
+mkdirSync("data/cv-briefs", { recursive: true });
 const jobs = db.prepare(
   `SELECT url, company, title, location, description, match_score, llm_score, llm_reason FROM jobs
    WHERE rejected IS NULL AND match_score >= 50 AND llm_score >= 50
@@ -40,7 +40,7 @@ const jobs = db.prepare(
 let written = 0;
 for (const j of jobs) {
   const slug = `${j.company}-${j.title}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
-  const path = `cv-briefs/${slug}.md`;
+  const path = `data/cv-briefs/${slug}.md`;
   if (existsSync(path)) continue;
   let brief;
   try {
@@ -63,4 +63,4 @@ produce the ATS-matched HTML+PDF in ~/Downloads/cv/tailored/.
 `);
   written++;
 }
-console.log(`cv briefs written: ${written} (folder: cv-briefs/)`);
+console.log(`cv briefs written: ${written} (folder: data/cv-briefs/)`);

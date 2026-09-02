@@ -69,7 +69,7 @@ export async function syncToCrm(db: Database.Database): Promise<{ pushed: number
       jobUrl: j.url,
       applyLink: { primaryLinkUrl: j.url, primaryLinkLabel: "Apply" },
       ...(j.posted_at ? { postedAt: new Date(j.posted_at).toISOString() } : {}),
-      ...(j.exp_required > 3.5 ? { expAsk: `asks ${j.exp_required}y (you: 2.5–3)` } : {}),
+      ...(j.exp_required > 3.5 ? { expAsk: `asks ${j.exp_required}y (above profile stretch)` } : {}),
       ...(j.llm_score != null && j.llm_score >= 0
         ? { llmScore: Math.round(j.llm_score), llmReason: (j.llm_reason ?? "").slice(0, 250) }
         : {}),

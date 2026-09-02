@@ -18,7 +18,7 @@ import { loadProfile } from "../src/profile.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
 try { process.loadEnvFile(".env"); } catch {}
-process.env.LLM_LIGHT = `opencode run -m ${MODEL}`;
+process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`; // default only — your .env LLM_LIGHT wins
 const actor = process.env.JOBHUNT_ACTOR || "cron";
 const db = openDb();
 const profile = loadProfile();
@@ -105,7 +105,8 @@ for (const c of companies) {
       { tier: "light", retries: 2, escalate: false, db, example: { people: [{ name: "Jane Doe", title: "Head of Developer Relations", linkedin_url: "https://linkedin.com/in/janedoe" }] } });
   } catch { console.log(`  ${c.company}: people extraction failed`); continue; }
 
-  const compRow = await twenty("GET", `companies?filter=name[eq]:${encodeURIComponent(c.company)}&limit=1`);
+  // quote the value — company names with commas/colons break Twenty's filter grammar otherwise
+  const compRow = await twenty("GET", `companies?filter=${encodeURIComponent(`name[eq]:"${c.company.replaceAll('"', "")}"`)}&limit=1`);
   const companyId = compRow?.data?.companies?.[0]?.id;
 
   let added = 0;
@@ -117,7 +118,7 @@ for (const c of companies) {
       msgs = extract(Msgs,
         `Write for the candidate below: (1) connect_note — a LinkedIn connection note UNDER 290 CHARACTERS to ${p.name} (${p.title} at ${c.company}), referencing the "${c.title}" opening, warm and specific, no flattery; (2) dm — a message under 150 words for after they accept, one concrete proof point, one clear ask.\nCandidate: ${profile.proof_points.slice(0, 4).join("; ")}. Available immediately.`,
         `Person: ${p.name}, ${p.title} @ ${c.company}. Opening: ${c.title}.`,
-        { tier: "light", retries: 2, escalate: false, db, example: { connect_note: "Hi Jane — saw the DevRel opening at Acme. I onboarded 7,000+ devs at Team1 and would love to connect.", dm: "Thanks for connecting! ..." } });
+        { tier: "light", retries: 2, escalate: false, db, example: { connect_note: "Hi Jane — saw the DevRel opening at Acme. I onboarded 7,000+ devs in my last role and would love to connect.", dm: "Thanks for connecting! ..." } });
     } catch {}
     try {
       db.prepare("INSERT INTO people (company, name, title, persona_tier, linkedin, provenance) VALUES (?, ?, ?, ?, ?, ?)")

@@ -1,7 +1,7 @@
 // STEP 6 — emails for the people YOU marked in the CRM (Fetch Email = YES).
 // Per person: cached? → pattern-guess + Reacher verify (free) → Hunter →
 // Prospeo. Per company: research brief (what they do + what you can offer).
-// Then a ≤300-word email draft saved to email-drafts/ and the CRM updated.
+// Then a ≤300-word email draft saved to data/email-drafts/ and the CRM updated.
 //
 // CREDIT GUARDS: lookups cache first — a person is never looked up twice;
 // vendors only run after the free rungs miss; only marked people cost anything.
@@ -19,10 +19,10 @@ import { loadProfile } from "../src/profile.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
 try { process.loadEnvFile(".env"); } catch {}
-process.env.LLM_LIGHT = `opencode run -m ${MODEL}`;
+process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`; // default only — your .env LLM_LIGHT wins
 const db = openDb();
 const profile = loadProfile();
-mkdirSync("email-drafts", { recursive: true });
+mkdirSync("data/email-drafts", { recursive: true });
 
 const U = process.env.TWENTY_URL!, K = process.env.TWENTY_API_KEY!;
 const twenty = async (method: string, path: string, body?: unknown) => {
@@ -31,7 +31,7 @@ const twenty = async (method: string, path: string, body?: unknown) => {
     method, headers: { Authorization: `Bearer ${K}`, "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  return res.ok ? res.json() : null;
+  return res.ok ? res.json() : (console.error(`twenty ${method} ${path}: ${res.status} ${(await res.text()).slice(0, 200)}`), null);
 };
 
 const cache = {
@@ -179,7 +179,7 @@ for (const p of marked) {
   } catch {}
 
   const slug = `${company}-${name}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
-  writeFileSync(`email-drafts/${slug}.md`,
+  writeFileSync(`data/email-drafts/${slug}.md`,
     `# ${name} <${found.email}> — ${company}\n\nrole: ${job?.title ?? "?"} (${job?.url ?? ""})\nstatus: ${found.status} · ${found.provenance}\n\n${r ? `## research\n${r.summary}\n\nangles: ${r.angles.join(" · ")}\n\n` : ""}## draft (${DRAFT_TIER})\nSubject: ${draft?.subject ?? "(draft failed — rerun or write manually)"}\n\n${draft?.body ?? ""}\n`);
 
   await twenty("PATCH", `people/${p.id}`, {
@@ -200,4 +200,4 @@ for (const p of marked) {
   const taskId = task?.data?.createTask?.id;
   if (taskId) await twenty("POST", "taskTargets", { taskId, personId: p.id });
 }
-console.log(`\ndrafts in email-drafts/ — skim, edit, then send (Gmail draft step comes later)`);
+console.log(`\ndrafts in data/email-drafts/ — skim, edit, then send (Gmail draft step comes later)`);

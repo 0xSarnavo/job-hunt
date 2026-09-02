@@ -60,6 +60,20 @@ CREATE TABLE IF NOT EXISTS applications (
   channel    TEXT
 );
 
+-- Investor-program directory (YC batches, a16z portfolio, ...). Full lists live
+-- here; only the relevant slice is pushed to the CRM (scripts/12-portfolios.mts).
+CREATE TABLE IF NOT EXISTS portfolio_companies (
+  program     TEXT NOT NULL,     -- registry slug: yc | a16z | ...
+  name        TEXT NOT NULL,
+  domain      TEXT,
+  batch       TEXT,              -- e.g. "Fall 2026" (YC); investment stage tags for VCs
+  status      TEXT,              -- Active | Acquired | Inactive | Exits | ...
+  url         TEXT,              -- company website
+  one_liner   TEXT,
+  first_seen  TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (program, name)
+);
+
 CREATE TABLE IF NOT EXISTS lookups (
   key         TEXT PRIMARY KEY,  -- e.g. "hunter:jane@acme.com", "fetch:https://..."
   provider    TEXT,

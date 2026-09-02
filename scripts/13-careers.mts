@@ -31,11 +31,18 @@ const U = process.env.TWENTY_URL, K = process.env.TWENTY_API_KEY;
 const twenty = async (method: string, path: string, body?: unknown) => {
   if (!U || !K) return null;
   await new Promise((r) => setTimeout(r, 700));
-  const res = await fetch(`${U}/rest/${path}`, {
-    method, headers: { Authorization: `Bearer ${K}`, "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return res.ok ? res.json() : (console.error(`twenty ${method} ${path}: ${res.status} ${(await res.text()).slice(0, 200)}`), null);
+  try {
+    const res = await fetch(`${U}/rest/${path}`, {
+      method, headers: { Authorization: `Bearer ${K}`, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(30_000),
+    });
+    return res.ok ? res.json() : (console.error(`twenty ${method} ${path}: ${res.status} ${(await res.text()).slice(0, 200)}`), null);
+  } catch (err) {
+    // network blips must not kill a long sweep — the CRM write is retried next run
+    console.error(`twenty ${method} ${path}: ${String(err).slice(0, 120)}`);
+    return null;
+  }
 };
 
 const BOARD_URL: Record<AtsKind, (t: string) => string> = {

@@ -19,6 +19,7 @@ import { ingest } from "../src/ingest.ts";
 import { loadProfile } from "../src/profile.ts";
 import { syncToCrm } from "../src/sync.ts";
 import { cacheGet, cachePut } from "../src/enrich.ts";
+import { notePending } from "../src/notes.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
 try { process.loadEnvFile(".env"); } catch {}
@@ -98,3 +99,13 @@ for (const c of rows) {
 // matched roles → Opportunities (same path as the daily sync)
 const { pushed } = await syncToCrm(db);
 console.log(`\n${boards} boards found · ${roles} live roles scanned · ${matches} total matches · ${pushed} new opportunities pushed`);
+
+const remaining = (db.prepare(`
+  SELECT count(*) n FROM portfolio_companies pc WHERE pc.domain IS NOT NULL
+    AND EXISTS (SELECT 1 FROM lookups WHERE key = 'crm:link:' || pc.program || ':' || lower(pc.name))
+    AND NOT EXISTS (SELECT 1 FROM lookups WHERE key = 'careers-check:' || pc.domain)`).get() as any).n;
+notePending("13-careers", [
+  `${remaining} portfolio companies not yet careers-checked (cap CAREERS_PER_RUN=${PER_RUN} per run — resolver rung 3 uses the TinyFish fetch quota, 1,000/day free)`,
+  `this run: ${rows.length} checked, ${boards} boards found, ${matches} matching roles, ${pushed} opportunities pushed`,
+  remaining > 0 ? "continues automatically on the next run-daily.sh (or run: npx tsx scripts/13-careers.mts)" : "backlog clear",
+]);

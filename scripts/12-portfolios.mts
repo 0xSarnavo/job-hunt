@@ -23,6 +23,7 @@ import { openDb } from "../src/db.ts";
 import { extract } from "../src/llm.ts";
 import { PORTALS, PORTFOLIOS } from "../src/registry.ts";
 import { cacheGet, cachePut } from "../src/enrich.ts";
+import { notePending } from "../src/notes.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
 try { process.loadEnvFile(".env"); } catch {}
@@ -320,3 +321,10 @@ for (const p of allPrograms) {
 writeFileSync("data/portfolio-companies.md", md);
 
 console.log(`\nCRM: +${pushed} portfolio companies created, ${linked} existing linked. Full list: data/portfolio-companies.md`);
+
+const unpushed = pushRows.filter((r) => !cacheGet(db, `crm:link:${r.program}:${r.name.toLowerCase()}`)).length;
+notePending("12-portfolios", [
+  `${unpushed} qualifying portfolio companies not yet in the CRM (cap PORTFOLIO_PUSH_MAX=${PUSH_MAX} per run; Twenty rate limit 100 req/min)`,
+  `this run: +${pushed} created, ${linked} linked; tracked totals — ${allPrograms.map((p) => `${p.slug}:${(db.prepare("SELECT count(*) n FROM portfolio_companies WHERE program=?").get(p.slug) as any).n}`).join(", ")}`,
+  unpushed > 0 ? "continues automatically on the next run" : "backlog clear",
+]);

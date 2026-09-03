@@ -75,12 +75,24 @@ const MODEL: Record<string, FieldSpec[]> = {
   ],
 };
 
-// Outreach pipeline states for the opportunity kanban (mirrors touches.state).
+// Outreach pipeline states for the opportunity kanban.
+// SENT → (no reply, 3 touches max) → STOPPED happens automatically (8-followups);
+// APPLIED / INTERVIEWING / OFFER you move yourself as things progress.
 const STAGE_OPTIONS = `[${[
   opt("QUEUED", "Queued", "gray", 0), opt("INVITED", "Invited", "sky", 1),
   opt("WARM", "Warm", "yellow", 2), opt("DRAFTED", "Drafted", "purple", 3),
-  opt("SENT", "Sent", "blue", 4), opt("REPLIED", "Replied", "green", 5),
-  opt("CLOSED", "Closed", "red", 6)].join(",")}]`;
+  opt("SENT", "Sent", "blue", 4), opt("APPLIED", "Applied", "turquoise", 5),
+  opt("REPLIED", "Replied", "green", 6), opt("INTERVIEWING", "Interviewing", "orange", 7),
+  opt("OFFER", "Offer", "green", 8), opt("STOPPED", "Stopped", "gray", 9),
+  opt("CLOSED", "Closed", "red", 10)].join(",")}]`;
+
+// Click-not-type rejection reasons (multi-select) — 15-feedback reads these.
+const FEEDBACK_OPTIONS = `[${[
+  opt("TOO_SENIOR", "Too senior", "orange", 0), opt("WRONG_ROLE", "Wrong role type", "red", 1),
+  opt("WRONG_DOMAIN", "Wrong domain", "purple", 2), opt("WRONG_LOCATION", "Location/geo", "sky", 3),
+  opt("AGENCY_STAFFING", "Agency / staffing", "yellow", 4), opt("COMP_TOO_LOW", "Comp too low", "pink", 5),
+  opt("COMPANY_DEAD", "Company inactive", "gray", 6), opt("NOT_A_FIT", "Not a fit (gut)", "blue", 7),
+  opt("OTHER", "Other (see note)", "turquoise", 8)].join(",")}]`;
 
 const objects = await gql("metadata",
   `query { objects(paging:{first:100}) { edges { node { id nameSingular isActive } } } }`);
@@ -138,6 +150,24 @@ MODEL.investorPortfolio = [
   { name: "companiesInCrm", label: "Companies In CRM", type: "NUMBER", description: "how many of those were pushed as CRM Companies" },
   { name: "notes", label: "Notes", type: "TEXT" },
 ];
+
+// Structured feedback (multi-select) + the 3-touch outreach ladder fields.
+MODEL.company!.push(
+  { name: "feedbackReason", label: "Feedback Reason", type: "MULTI_SELECT", options: FEEDBACK_OPTIONS,
+    description: "click why this company is irrelevant — 15-feedback learns from it" });
+MODEL.opportunity!.push(
+  { name: "feedbackReason", label: "Feedback Reason", type: "MULTI_SELECT", options: FEEDBACK_OPTIONS,
+    description: "click why this role is irrelevant — the judge learns from it" },
+  { name: "touches", label: "Touches", type: "NUMBER", description: "outreach messages sent (max 3, then auto-STOPPED)" },
+  { name: "interviewAt", label: "Interview At", type: "DATE_TIME", description: "next interview — set it and 8-followups makes a prep task" });
+MODEL.person!.push(
+  { name: "outreachStage", label: "Outreach Stage", type: "SELECT", options: `[${[
+    opt("QUEUED", "Queued", "gray", 0), opt("CONNECTED", "Connected", "sky", 1),
+    opt("TOUCH_1", "Touch 1", "blue", 2), opt("TOUCH_2", "Touch 2", "purple", 3),
+    opt("TOUCH_3", "Touch 3", "yellow", 4), opt("REPLIED", "Replied", "green", 5),
+    opt("STOPPED", "Stopped", "red", 6)].join(",")}]` },
+  { name: "lastTouchAt", label: "Last Touch At", type: "DATE_TIME" },
+  { name: "nextFollowUpAt", label: "Next Follow-up At", type: "DATE_TIME" });
 
 for (const [obj, fields] of Object.entries(MODEL)) {
   const id = objId[obj];

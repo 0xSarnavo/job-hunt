@@ -38,9 +38,20 @@ const put = db.prepare(`
   VALUES (@kind, @ref, @company, @title, @reason)
   ON CONFLICT(kind, ref) DO UPDATE SET reason=excluded.reason, at=datetime('now')`);
 
-// --- opportunities: CLOSED stage or a Feedback Note ---
+// Multi-select values → readable labels (mirrors setup-crm FEEDBACK_OPTIONS)
+const LABELS: Record<string, string> = {
+  TOO_SENIOR: "too senior", WRONG_ROLE: "wrong role type", WRONG_DOMAIN: "wrong domain",
+  WRONG_LOCATION: "location/geo", AGENCY_STAFFING: "agency/staffing", COMP_TOO_LOW: "comp too low",
+  COMPANY_DEAD: "company inactive", NOT_A_FIT: "not a fit", OTHER: "",
+};
+const reasonOf = (r: any): string =>
+  [...(Array.isArray(r.feedbackReason) ? r.feedbackReason.map((v: string) => LABELS[v] ?? v.toLowerCase()) : []),
+    (r.feedbackNote || "").trim()]
+    .filter(Boolean).join("; ");
+
+// --- opportunities: CLOSED stage, clicked reasons, or a note ---
 let opps: any[] = [];
-for (const filter of ["stage[eq]:CLOSED", "feedbackNote[is]:NOT_NULL"]) {
+for (const filter of ["stage[eq]:CLOSED", "feedbackNote[is]:NOT_NULL", "feedbackReason[is]:NOT_NULL"]) {
   const page = (await twenty(`opportunities?filter=${encodeURIComponent(filter)}&limit=200`))?.data?.opportunities ?? [];
   opps.push(...page);
 }
@@ -49,18 +60,23 @@ let oppN = 0, jobN = 0;
 for (const o of opps) {
   if (!o.jobUrl || seen.has(o.jobUrl)) continue;
   seen.add(o.jobUrl);
-  const reason = (o.feedbackNote || "").trim() || "closed without reason";
+  const reason = reasonOf(o) || "closed without reason";
   put.run({ kind: "opportunity", ref: o.jobUrl, company: o.name?.split("—")[0]?.trim() ?? null, title: o.jobTitle ?? null, reason });
   const r = db.prepare("UPDATE jobs SET rejected = ? WHERE url = ? AND (rejected IS NULL OR rejected LIKE 'user:%')")
     .run(`user: ${reason}`.slice(0, 120), o.jobUrl);
   oppN++; jobN += r.changes;
 }
 
-// --- companies with a Feedback Note ---
-const comps = (await twenty(`companies?filter=${encodeURIComponent("feedbackNote[is]:NOT_NULL")}&limit=200`))?.data?.companies ?? [];
+// --- companies with clicked reasons or a note ---
+const comps: any[] = [];
+for (const filter of ["feedbackNote[is]:NOT_NULL", "feedbackReason[is]:NOT_NULL"])
+  comps.push(...((await twenty(`companies?filter=${encodeURIComponent(filter)}&limit=200`))?.data?.companies ?? []));
 let compN = 0;
+const seenComp = new Set<string>();
 for (const c of comps) {
-  const reason = (c.feedbackNote || "").trim();
+  if (seenComp.has(c.name)) continue;
+  seenComp.add(c.name);
+  const reason = reasonOf(c);
   if (!reason) continue;
   put.run({ kind: "company", ref: c.name, company: c.name, title: null, reason });
   db.prepare("UPDATE companies SET pitch = 0 WHERE lower(name) = lower(?)").run(c.name);

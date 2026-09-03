@@ -178,6 +178,7 @@ for (const c of companies) {
       jobTitle: p.title,
       linkedinLink: { primaryLinkUrl: p.linkedin_url },
       personaTier: persona.toUpperCase(),
+      outreachStage: "QUEUED",
       fetchEmail: "NO",
       linkedinNote: msgs.connect_note,
       dmDraft: msgs.dm,

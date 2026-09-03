@@ -15,6 +15,7 @@ import { z } from "zod";
 import { openDb } from "../src/db.ts";
 import { extract } from "../src/llm.ts";
 import { loadProfile } from "../src/profile.ts";
+import { track } from "../src/usage.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
 try { process.loadEnvFile(".env"); } catch {}
@@ -74,6 +75,43 @@ const tier = (t: string) =>
 // employers, so people-finding there is wasted effort.
 const AGGREGATORS = new Set(["jobgether", "jobs via dice", "cybercoders", "hays", "randstad", "adecco"]);
 
+// Fiber people-search — the primary source: profile pulls are FREE (10k/month,
+// only contact reveals cost credits; our email waterfall replaces those).
+// Falls back to web search + LLM extraction when Fiber has nothing.
+const TITLE_TERMS = ["founder", "ceo", "cto", "marketing", "growth", "developer relations", "developer advocate", "talent"];
+async function fiberPeople(company: string, domain: string | null): Promise<{ name: string; title: string; linkedin_url: string }[]> {
+  const fiberKey = process.env.FIBER_API_KEY;
+  if (!fiberKey) return [];
+  const cacheKey = `fiber:people:${company.toLowerCase()}`;
+  const hit = db.prepare("SELECT result FROM lookups WHERE key = ?").get(cacheKey) as any;
+  if (hit) return JSON.parse(hit.result);
+  let people: { name: string; title: string; linkedin_url: string }[] = [];
+  try {
+    track("fiber");
+    const res = await fetch("https://api.fiber.ai/v1/people-search", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        apiKey: fiberKey, pageSize: 6,
+        currentCompanies: [domain ? { domain } : { name: company }],
+        searchParams: { jobTitleV3: { anyOf: TITLE_TERMS.map((t) => ({ type: "plain", term: t })) } },
+      }),
+      signal: AbortSignal.timeout(45_000),
+    });
+    if (!res.ok) { console.error(`  fiber: ${res.status} ${(await res.text()).slice(0, 120)}`); return []; }
+    const body = (await res.json()) as any;
+    people = (body?.output?.data ?? [])
+      .map((p: any) => ({
+        name: p.name ?? [p.first_name, p.last_name].filter(Boolean).join(" "),
+        title: (p.experiences?.find((e: any) => e.is_current)?.title ?? p.headline ?? "").slice(0, 120),
+        linkedin_url: p.url ?? (p.primary_slug ? `https://linkedin.com/in/${p.primary_slug}` : ""),
+      }))
+      .filter((p: any) => p.name && /linkedin\.com\/in\//i.test(p.linkedin_url));
+    db.prepare("INSERT OR REPLACE INTO lookups (key, provider, result, cost) VALUES (?, 'fiber', ?, 0)")
+      .run(cacheKey, JSON.stringify(people));
+  } catch (err) { console.error(`  fiber: ${String(err).slice(0, 100)}`); }
+  return people;
+}
+
 // pitch targets first (fewer, higher intent), then top selected job companies
 const seen = new Set<string>();
 const companies = ([
@@ -93,17 +131,26 @@ const companies = ([
 console.log(`finding people at ${companies.length} companies: ${companies.map((c) => c.company).join(", ")}`);
 
 for (const c of companies) {
-  const raw =
-    search(`site:linkedin.com/in "${c.company}" founder OR CTO OR "developer relations" OR "head of marketing" OR "head of growth"`) +
-    "\n" + search(`site:linkedin.com/in "${c.company}" devrel OR "developer advocate" OR "product marketing"`);
-  if (raw.trim().length < 50) { console.log(`  ${c.company}: search unavailable, will retry next run`); continue; }
-  let found;
-  try {
-    found = extract(People,
-      `From these search results, extract real people who currently work at "${c.company}" (the company hiring for "${c.title}"). Only people, only this company, linkedin_url must be a linkedin.com/in/ URL.`,
-      raw.slice(0, 6000),
-      { tier: "light", retries: 2, escalate: false, db, example: { people: [{ name: "Jane Doe", title: "Head of Developer Relations", linkedin_url: "https://linkedin.com/in/janedoe" }] } });
-  } catch { console.log(`  ${c.company}: people extraction failed`); continue; }
+  const domain = (db.prepare(
+    `SELECT domain FROM companies WHERE lower(name)=lower(?) AND domain LIKE '%.%'
+     UNION SELECT domain FROM portfolio_companies WHERE lower(name)=lower(?) AND domain IS NOT NULL LIMIT 1`,
+  ).get(c.company, c.company) as any)?.domain ?? null;
+
+  // rung 1: Fiber (free, structured). rung 2: web search + LLM extraction.
+  let found = { people: await fiberPeople(c.company, domain) };
+  if (found.people.length) console.log(`  ${c.company}: ${found.people.length} via fiber`);
+  else {
+    const raw =
+      search(`site:linkedin.com/in "${c.company}" founder OR CTO OR "developer relations" OR "head of marketing" OR "head of growth"`) +
+      "\n" + search(`site:linkedin.com/in "${c.company}" devrel OR "developer advocate" OR "product marketing"`);
+    if (raw.trim().length < 50) { console.log(`  ${c.company}: search unavailable, will retry next run`); continue; }
+    try {
+      found = extract(People,
+        `From these search results, extract real people who currently work at "${c.company}" (the company hiring for "${c.title}"). Only people, only this company, linkedin_url must be a linkedin.com/in/ URL.`,
+        raw.slice(0, 6000),
+        { tier: "light", retries: 2, escalate: false, db, example: { people: [{ name: "Jane Doe", title: "Head of Developer Relations", linkedin_url: "https://linkedin.com/in/janedoe" }] } });
+    } catch { console.log(`  ${c.company}: people extraction failed`); continue; }
+  }
 
   // quote the value — company names with commas/colons break Twenty's filter grammar otherwise
   const compRow = await twenty("GET", `companies?filter=${encodeURIComponent(`name[eq]:"${c.company.replaceAll('"', "")}"`)}&limit=1`);

@@ -11,6 +11,7 @@ export const LIMITS: Record<string, string> = {
   "tinyfish-search": "500/hr (free forever)",
   "tinyfish-fetch": "1,000/day (free forever)",
   firecrawl: "1,000/mo",
+  fiber: "10,000 profile pulls/mo free (reveals cost credits — unused)",
   adzuna: "~1,000/mo",
   jooble: "500 TOTAL grant",
   hunter: "50 searches/mo",

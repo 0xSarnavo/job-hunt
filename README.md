@@ -1,132 +1,175 @@
 # job-hunt
 
-Signal-led outreach for a job search, built to run on **free tiers only**. One pipeline, two
-signals: **job postings that match a profile**, and **recently funded companies confirmed to be
-hiring**. Both feed the same machine — company → people → enrich → score → personalise → execute —
-with a human in the loop at every send point.
+A job-search pipeline that runs on free tiers. It watches two signals — job postings that
+match your profile, and freshly funded companies at the size where founders still hire
+directly — and turns them into a CRM full of companies, people, and drafted outreach.
+Nothing sends itself: you review every connect note and email before it goes out.
 
-Anyone can clone this and run their own job hunt: your profile, CV, and all generated data stay
-local (gitignored) — nothing personal lives in this repo.
+Clone it and run your own hunt. Your profile, CV, and all results stay local and gitignored.
 
 ## Quickstart
 
 ```bash
 git clone https://github.com/0xSarnavo/job-hunt && cd job-hunt
-npm install && npm link                    # `npm link` makes `jobhunt` available everywhere
-cp .env.example .env                       # fill in the keys you have — missing ones just disable that step
-jobhunt setup                              # point at your CV → drafted profile + short interview + checks
-jobhunt daily                              # then just this, once a day
+npm install && npm link          # makes `jobhunt` available everywhere
+cp .env.example .env             # add the keys you have; a missing key only disables its step
+jobhunt setup                    # reads your CV, drafts profile.yaml, asks the rest
+jobhunt daily                    # then this, once a day
 ```
 
-One command to remember: **`jobhunt`**. Alone it shows a menu; or use the verbs directly:
+`jobhunt` alone shows a menu. The verbs:
 
-| verb | what it does |
+| verb | does |
 |---|---|
-| `jobhunt setup` | first time: reads your CV, drafts `profile.yaml`, asks what a CV can't say |
-| `jobhunt check` | verifies keys, LLM CLIs, DB, and the CRM data model — ✗ items come with fixes |
-| `jobhunt daily` | runs the whole pipeline (same as `npm run daily`) |
-| `jobhunt people` | finds more people to reach (`--max 50` to go wider) |
-| `jobhunt status` | local + CRM counts, and what's pending in `data/PENDING.md` |
+| `jobhunt setup` | first run: CV → drafted `profile.yaml` → short interview → checks |
+| `jobhunt check` | verifies keys, LLM CLIs, DB, CRM data model; every ✗ names its fix |
+| `jobhunt daily` | runs the whole pipeline |
+| `jobhunt people` | finds more people to reach (`--max 50` for a bigger batch) |
+| `jobhunt status` | progress bars, counts, and what's pending |
 
-Every external dependency is optional and degrades gracefully:
+## How it works
 
-- **LLM calls** shell out to a CLI — default `opencode run` (free models) for cheap extraction and
-  `claude -p` for judgement calls. Point `LLM_LIGHT` / `LLM_HEAVY` in `.env` at ANY prompt-taking
-  CLI you have (`claude -p`, `opencode run -m <model>`, `llm`, ...). Nothing is hard-required: a
-  step that can't reach a model skips its items and moves on.
-- **API keys** (`.env.example` lists them all) each unlock one step. No key → that source/step is
-  skipped, the rest of the pipeline still runs.
-- **CRM**: a free self-hosted [Twenty](https://twenty.com) instance (Railway template works).
-  `npm run setup-crm` builds the whole data model for you. No CRM configured → SQLite still holds
-  everything.
+```mermaid
+flowchart LR
+    subgraph signals [signals in]
+        boards[job boards & feeds]
+        funding[funding news RSS]
+        portfolios[investor portfolios<br/>YC · a16z · BLR map]
+    end
+    subgraph local [local SQLite]
+        score[rule score 0-100]
+        judge[free-model judge]
+    end
+    subgraph crm [Twenty CRM]
+        companies[Companies]
+        opps[Opportunities kanban]
+        people[People + drafted notes]
+    end
+    boards --> score
+    funding --> score
+    portfolios --> careers[careers-page check] --> score
+    score --> judge --> opps
+    judge --> companies --> people
+    people --> you([you click send])
+    opps --> you
+```
 
-## Folder map
+Postings get a deterministic rule score (title, keywords, location, freshness), then a free
+LLM judges everything the rules liked. Double-passed roles land on a kanban in
+[Twenty](https://twenty.com); the pipeline then finds founders and hiring managers at those
+companies and drafts a connect note and DM for each. Funded companies without a matching
+posting become pitch targets instead.
+
+## Daily run order
+
+Script numbers are build order, not run order. `scripts/run-daily.sh` runs them like this:
+
+| # | script | does |
+|---|---|---|
+| 1 | `1-fetch` | pulls postings from every portal, including boards you add in the CRM |
+| 2 | `7-funded` | funding RSS (US · UK · EU · India · AU) → enrich → 5–50 headcount pitch targets |
+| 3 | `14-backfill` | walks 2 years of funding archives, one bounded chunk per day |
+| 4 | `11-vc-companies` | newest YC batches → pitch targets |
+| 5 | `12-portfolios` | investor programs + their member companies → CRM |
+| 6 | `13-careers` | detects each portfolio company's ATS; re-scans known boards weekly |
+| 7 | `2-llm-score` | free-model judge on new matches |
+| 8 | `3-cv-briefs` | CV-tailoring brief per double-passed job → `data/cv-briefs/` |
+| 9 | `4-sync` | matched jobs → CRM kanban |
+| 10 | `5-people` | people per company: Fiber profiles first, web search fallback |
+| 11 | `6-emails` | email waterfall, only for people you marked `Fetch Email = YES` |
+| 12 | `8-followups` | drafts follow-ups for stale SENT cards |
+| 13 | `9-connect-list` | regenerates `data/connect-list.md` |
+| 14 | `10-usage-sync` | per-vendor API usage counters → CRM |
+
+Any step that stops at a cap or quota writes what's left, and why, to `data/PENDING.md`.
+
+### It gets faster on its own
+
+Heavy work is front-loaded and drains itself: the archive backfill keeps a resume cursor per
+feed until it reaches the 2-year mark, first-time careers checks are cached forever, and each
+finished backlog frees the daily run for cheap freshness work: known boards re-scan on a
+weekly rotation (oldest first, ~80/day), so a company that starts hiring your roles next
+month gets caught without you doing anything. Day one is slow. A month in, `jobhunt daily`
+is mostly quick re-scans of the newest data.
+
+## The CRM
+
+`npm run setup-crm` builds five objects (plus an API-usage tracker) in a self-hosted Twenty:
+
+```mermaid
+erDiagram
+    JOB_PORTAL {
+        string kind "ATS API / feed / VC board / company board"
+        string status "active / planned / later"
+    }
+    INVESTOR_PORTFOLIO {
+        string kind "accelerator / VC / directory"
+        int companiesTracked
+    }
+    COMPANY {
+        string ats "greenhouse / lever / ashby / ..."
+        string fundingStage
+        int headcount
+    }
+    PERSON {
+        string personaTier "founder / hiring manager / peer / recruiter"
+        string linkedinNote "drafted, 300 chars"
+    }
+    OPPORTUNITY {
+        string stage "QUEUED -> SENT -> REPLIED"
+        int llmScore
+    }
+    INVESTOR_PORTFOLIO ||--o{ COMPANY : "has"
+    COMPANY ||--o{ PERSON : "employs"
+    COMPANY ||--o{ OPPORTUNITY : "hiring for"
+```
+
+Portal status legend: **Active** = fetched every run. **Planned** = adapter exists; flip the
+status in the CRM to start it. **Later** = blocked by something real (login walls, account
+risk); `docs/SOURCES.md` says what.
+
+The CRM is an input too, not only a mirror:
+
+- Add a **Job Portal** (Kind = VC Board, Status = Active, plus a URL) and the next `1-fetch`
+  parses that page like any built-in source.
+- Add an **Investor Portfolio** with a URL and the next `12-portfolios` extracts its company
+  list and links the companies to your record. Sites that need a real parser get one in
+  `src/registry.ts` + `scripts/12-portfolios.mts`; the YC, a16z, and Bangalore-map blocks
+  are the templates.
+- `13-careers` adds every ATS board it discovers as a Company Board portal, so your watchlist
+  grows by itself.
+
+## What's free, what's optional
+
+Everything degrades instead of failing:
+
+- **LLM calls** shell out to whatever CLI you have. Defaults: `opencode run` (free models)
+  for extraction, `claude -p` for judgement. Point `LLM_LIGHT` / `LLM_HEAVY` in `.env` at
+  any prompt-taking CLI. A step that can't reach a model skips its items and moves on.
+- **Each API key unlocks one step** (`.env.example` lists them). No key, no step, rest of
+  the pipeline unaffected.
+- **People profiles** come from Fiber's free tier (10,000 pulls/month); email discovery uses
+  a waterfall of free-tier vendors with results cached forever.
+- **No CRM configured?** SQLite still holds everything.
+
+## Folders
 
 ```
-docs/        PLAN.md (the spec) · SOURCES.md (where jobs come from) · TOOLING.md (per-step tools)
-src/         shared library — db, llm, scoring, resolver, sources/, CRM setup & sync, registry
-scripts/     the pipeline, numbered steps + run-daily.sh (canonical run order lives there)
-data/        EVERYTHING generated & personal (gitignored): jobhunt.db, cv-briefs/, email-drafts/,
-             connect-list.md, portfolio-companies.md, PENDING.md (what's left undone and why)
-profile.yaml YOUR profile (gitignored) — copy profile.example.yaml
-.env         YOUR keys (gitignored) — copy .env.example
+docs/         PLAN.md (the spec) · SOURCES.md (every source + status) · TOOLING.md (tool choices)
+src/          shared library: db, llm, scoring, resolver, sources/, CRM setup & sync, registry
+scripts/      numbered pipeline steps + run-daily.sh
+data/         generated & personal, all gitignored: jobhunt.db, cv-briefs/, email-drafts/,
+              connect-list.md, portfolio-companies.md, PENDING.md, LINKS.md
+profile.yaml  your profile (gitignored) — written by `jobhunt setup`
+.env          your keys (gitignored) — copy .env.example
 ```
 
-## The pipeline (run order = `scripts/run-daily.sh`)
+The split that matters for a public repo: `src/registry.ts` (which portals and programs the
+pipeline follows) is tracked. The results (companies, people, roles, drafts, your profile)
+never leave `data/`, `profile.yaml`, and your CRM.
 
-**Signals in**
-| step | what it does |
-|---|---|
-| 1-fetch | pulls postings from every configured job portal (incl. boards you add in the CRM) |
-| 7-funded | funding RSS (US · EU · UK · India · AU) → enrich → 5–50 headcount pitch targets |
-| 11-vc-companies | newest YC batches → active pitch targets |
-| 12-portfolios | investor programs (YC, a16z, Bangalore Startup Map, CRM-added) + their companies → CRM |
-| 13-careers | portfolio companies' careers pages → ATS detected, live matching roles → Opportunities |
+## Knobs
 
-**Judge + prep**
-| step | what it does |
-|---|---|
-| 2-llm-score | free-model judge re-scores the rule-based matches |
-| 3-cv-briefs | writes a CV-tailoring brief per double-passed job → `data/cv-briefs/` |
-| 4-sync | pushes matched jobs to the CRM (Companies + Opportunities kanban) |
-
-**People + outreach (nothing sends itself)**
-| step | what it does |
-|---|---|
-| 5-people | finds founders/hiring managers per company, drafts LinkedIn notes |
-| 6-emails | email waterfall for people YOU marked `Fetch Email = YES` in the CRM |
-| 8-followups | drafts follow-ups for stale SENT cards |
-| 9-connect-list | regenerates `data/connect-list.md` — who to connect with today |
-
-**Bookkeeping**: 10-usage-sync pushes per-vendor API-usage counters to the CRM, and steps that
-stop at a cap or quota write what's left (and why) to `data/PENDING.md`.
-
-**Progressive by design.** Heavy work is front-loaded and shrinks by itself: the archive
-backfill walks each outlet with a resume cursor until it hits the 2-year mark, first-time
-careers checks drain a one-off backlog, and every check is cached forever. What grows in
-their place is cheap freshness: known company boards get re-scanned on a weekly rotation
-(oldest first), so a company that starts hiring your roles next month is caught automatically.
-Day one is slow; a month in, `jobhunt daily` is mostly fast re-scans of the newest data.
-
-## The CRM model (Twenty)
-
-Five objects, created by `npm run setup-crm`:
-
-1. **Job Portals** — every place the pipeline pulls postings/signals from (registry: `src/registry.ts`).
-   Status legend: *Active* = fetched on every run · *Planned* = adapter exists, flip the status to
-   start it · *Later* = blocked on something real (login walls, account risk — see SOURCES.md)
-2. **Investor Portfolios** — accelerators & VC programs (YC, a16z, Sequoia, ...) with scrape status
-3. **Companies** — scraped from job portals and investor portfolios, linked to their portfolio
-4. **People** — per company, tiered (founder / hiring manager / peer / recruiter) with drafted notes
-5. **Opportunities** — matched/pitched roles on a QUEUED → SENT → REPLIED kanban
-
-plus **API Usage** — free-tier budget counters per vendor.
-
-Nothing is ever sent automatically: LinkedIn connects are a list you click yourself, and emails
-are Gmail drafts you review and send yourself. See `docs/PLAN.md` §6–7 for why.
-
-## Customizing
-
-**Add a job board — from the CRM.** Create a Job Portal record with Kind = *VC Board*,
-Status = *Active*, and a Portal URL. The next `1-fetch` run fetches that page, parses the
-listings with the free model, and scores them like any other source. Any *Planned* board
-starts the same way — just flip its Status to Active.
-
-**Add an investor program — from the CRM.** Create an Investor Portfolio record with a
-Portfolio URL. The next `12-portfolios` run fetches the page, extracts the company list
-(best effort — clean directory pages work well), pushes companies with websites into the CRM
-linked to your record, and keeps its counts updated. For sites needing a dedicated parser,
-add an entry in `src/registry.ts` and a scraper block in `scripts/12-portfolios.mts`
-(the YC / a16z / Bangalore-map blocks are the templates).
-
-**Company boards find themselves.** `13-careers` resolves each portfolio company's ATS and
-adds discovered boards as Job Portal records (Kind = *Company Board*) — your personal,
-growing list of boards worth watching.
-
-**What's public vs private.** The registries of portals and programs you follow
-(`src/registry.ts`) are part of the repo. The *results* — companies, people, roles, drafts,
-your profile — live only in `data/`, `profile.yaml`, and your CRM, all gitignored.
-
-**Knobs.** Every script has a "Knobs" block at the top (batch sizes, batches to push,
-models). Env overrides: `LLM_LIGHT` / `LLM_HEAVY` (any prompt-taking CLI), `JOBHUNT_DB`,
-`PORTFOLIO_YC_BATCHES`, `PORTFOLIO_PUSH_MAX`, `CAREERS_PER_RUN`, `VC_QUERIES`.
+Every script opens with a Knobs block (batch sizes, models, caps). Env overrides:
+`LLM_LIGHT`, `LLM_HEAVY`, `JOBHUNT_DB`, `PORTFOLIO_YC_BATCHES`, `PORTFOLIO_PUSH_MAX`,
+`CAREERS_PER_RUN`, `CAREERS_RESCAN`, `PEOPLE_PER_RUN`, `BACKFILL_DAYS`, `VC_QUERIES`.

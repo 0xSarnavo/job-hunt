@@ -4,7 +4,8 @@ import { openDb } from "../src/db.ts";
 import { syncToCrm } from "../src/sync.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 process.env.JOBHUNT_ACTOR ||= "cron";
 const { pushed, skipped } = await syncToCrm(openDb());
 console.log(`crm sync: ${pushed} new opportunities, ${skipped} already synced`);

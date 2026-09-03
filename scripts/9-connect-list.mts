@@ -8,7 +8,8 @@ import { writeFileSync } from "node:fs";
 import { openDb } from "../src/db.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 const db = openDb();
 
 const companies = db.prepare(`

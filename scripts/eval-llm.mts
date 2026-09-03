@@ -17,7 +17,8 @@ const MODEL = process.argv[2] ?? "opencode/mimo-v2.5-free";
 const N = Number(process.argv[3] ?? 12);
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`; // default only — your .env LLM_LIGHT wins
 
 const Fit = z.object({ score: z.number().min(0).max(100), reason: z.string().max(200) });

@@ -9,8 +9,14 @@
 //     personal, growing list of boards worth rechecking
 //   - matching roles land as Opportunities via the normal sync
 //
+// Progressive freshness: once a board is known, it gets RE-scanned on a weekly
+// rotation (oldest-scanned first) — new roles posted later are never missed.
+// As the first-check backlog empties, daily capacity naturally shifts to re-scans.
+//
 // Knobs:
-const PER_RUN = Number(process.env.CAREERS_PER_RUN ?? 10); // resolver fetches cost time, not money
+const PER_RUN = Number(process.env.CAREERS_PER_RUN ?? 10); // first checks: resolver fetches cost time, not money
+const RESCAN_PER_RUN = Number(process.env.CAREERS_RESCAN ?? 80); // known boards re-checked per run (free public APIs)
+const RESCAN_DAYS = 7;
 
 import { openDb } from "../src/db.ts";
 import { resolve } from "../src/resolver.ts";
@@ -22,7 +28,8 @@ import { cacheGet, cachePut } from "../src/enrich.ts";
 import { notePending } from "../src/notes.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 const actor = process.env.JOBHUNT_ACTOR || "cron";
 const db = openDb();
 const profile = loadProfile();
@@ -87,6 +94,7 @@ for (const c of rows) {
   ).get(c.name) as any;
   roles += postings.length; matches += best.n;
   console.log(`  ${c.name}: ${r.ats}/${r.token} — ${postings.length} live roles, ${best.n} match (${res.added} new)`);
+  cachePut(db, `board-scan:${c.domain}`, "board-scan", { at: new Date().toISOString().replace("T", " ").slice(0, 19), roles: postings.length });
 
   // the discovered board becomes a personal Job Portal record (once)
   const portalKey = `crm:portal:company:${c.domain}`;
@@ -103,6 +111,27 @@ for (const c of rows) {
   }
 }
 
+// ---------- weekly rotating re-scan of KNOWN boards ----------
+const stale = db.prepare(`
+  SELECT c.name, c.domain, c.ats, c.ats_token,
+         coalesce(json_extract(l.result, '$.at'), '1970') last_scan
+  FROM companies c
+  LEFT JOIN lookups l ON l.key = 'board-scan:' || c.domain
+  WHERE c.ats IN ('greenhouse','lever','ashby','workable','smartrecruiters')
+    AND c.ats_token IS NOT NULL
+    AND coalesce(json_extract(l.result, '$.at'), '1970') < datetime('now', '-${RESCAN_DAYS} days')
+  ORDER BY last_scan ASC LIMIT ?`).all(RESCAN_PER_RUN) as any[];
+
+let rescanned = 0, rescanNew = 0;
+for (const c of stale) {
+  let postings: Awaited<ReturnType<typeof fetchBoard>> = [];
+  try { postings = await fetchBoard(c.ats as AtsKind, c.ats_token, c.name); } catch {}
+  const res = ingest(db, postings, profile);
+  rescanned++; rescanNew += res.added;
+  cachePut(db, `board-scan:${c.domain}`, "board-scan", { at: new Date().toISOString().replace("T", " ").slice(0, 19), roles: postings.length });
+}
+if (rescanned) console.log(`re-scanned ${rescanned} known boards (>${RESCAN_DAYS}d old) — ${rescanNew} new postings`);
+
 // matched roles → Opportunities (same path as the daily sync)
 const { pushed } = await syncToCrm(db);
 console.log(`\n${boards} boards found · ${roles} live roles scanned · ${matches} total matches · ${pushed} new opportunities pushed`);
@@ -113,6 +142,6 @@ const remaining = (db.prepare(`
     AND NOT EXISTS (SELECT 1 FROM lookups WHERE key = 'careers-check:' || pc.domain)`).get() as any).n;
 notePending("13-careers", [
   `${remaining} portfolio companies not yet careers-checked (cap CAREERS_PER_RUN=${PER_RUN} per run — resolver rung 3 uses the TinyFish fetch quota, 1,000/day free)`,
-  `this run: ${rows.length} checked, ${boards} boards found, ${matches} matching roles, ${pushed} opportunities pushed`,
+  `this run: ${rows.length} first-checked (${boards} boards found), ${rescanned} known boards re-scanned (${rescanNew} new postings), ${matches} matching roles, ${pushed} opportunities pushed`,
   remaining > 0 ? "continues automatically on the next run-daily.sh (or run: npx tsx scripts/13-careers.mts)" : "backlog clear",
 ]);

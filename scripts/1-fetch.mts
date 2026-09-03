@@ -19,7 +19,8 @@ import { adzuna, jooble } from "../src/sources/apis.ts";
 import { makeVcSource } from "../src/sources/vc.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 for (const [k, v] of Object.entries(KNOBS)) process.env[k] ??= v; // defaults only — your .env wins
 
 const profile = loadProfile();

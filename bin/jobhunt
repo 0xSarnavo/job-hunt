@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+// `jobhunt` from anywhere: cd to the repo root, then run the CLI via tsx.
+// Install once with `npm link` from the repo folder.
+import { spawnSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const res = spawnSync("npx", ["tsx", "src/cli.ts", ...process.argv.slice(2)], {
+  cwd: root,
+  stdio: "inherit",
+});
+process.exit(res.status ?? 1);

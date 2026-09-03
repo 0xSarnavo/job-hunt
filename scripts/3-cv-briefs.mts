@@ -14,7 +14,8 @@ import { openDb } from "../src/db.ts";
 import { extract } from "../src/llm.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`; // default only — your .env LLM_LIGHT wins
 
 const VARIANTS = [

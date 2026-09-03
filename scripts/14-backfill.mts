@@ -21,7 +21,8 @@ import { companyDomain, apolloEnrich, cacheGet, cachePut } from "../src/enrich.t
 import { notePending } from "../src/notes.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`;
 const actor = process.env.JOBHUNT_ACTOR || "cron";
 const db = openDb();

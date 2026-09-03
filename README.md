@@ -12,11 +12,21 @@ local (gitignored) — nothing personal lives in this repo.
 
 ```bash
 git clone https://github.com/0xSarnavo/job-hunt && cd job-hunt
-npm install
+npm install && npm link                    # `npm link` makes `jobhunt` available everywhere
 cp .env.example .env                       # fill in the keys you have — missing ones just disable that step
-cp profile.example.yaml profile.yaml       # YOUR target roles, dealbreakers, proof points
-npm run daily                              # the whole pipeline — run this every day
+jobhunt setup                              # point at your CV → drafted profile + short interview + checks
+jobhunt daily                              # then just this, once a day
 ```
+
+One command to remember: **`jobhunt`**. Alone it shows a menu; or use the verbs directly:
+
+| verb | what it does |
+|---|---|
+| `jobhunt setup` | first time: reads your CV, drafts `profile.yaml`, asks what a CV can't say |
+| `jobhunt check` | verifies keys, LLM CLIs, DB, and the CRM data model — ✗ items come with fixes |
+| `jobhunt daily` | runs the whole pipeline (same as `npm run daily`) |
+| `jobhunt people` | finds more people to reach (`--max 50` to go wider) |
+| `jobhunt status` | local + CRM counts, and what's pending in `data/PENDING.md` |
 
 Every external dependency is optional and degrades gracefully:
 
@@ -70,6 +80,13 @@ profile.yaml YOUR profile (gitignored) — copy profile.example.yaml
 
 **Bookkeeping**: 10-usage-sync pushes per-vendor API-usage counters to the CRM, and steps that
 stop at a cap or quota write what's left (and why) to `data/PENDING.md`.
+
+**Progressive by design.** Heavy work is front-loaded and shrinks by itself: the archive
+backfill walks each outlet with a resume cursor until it hits the 2-year mark, first-time
+careers checks drain a one-off backlog, and every check is cached forever. What grows in
+their place is cheap freshness: known company boards get re-scanned on a weekly rotation
+(oldest first), so a company that starts hiring your roles next month is caught automatically.
+Day one is slow; a month in, `jobhunt daily` is mostly fast re-scans of the newest data.
 
 ## The CRM model (Twenty)
 

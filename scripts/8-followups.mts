@@ -16,7 +16,8 @@ import { loadProfile } from "../src/profile.ts";
 import { cacheGet, cachePut } from "../src/enrich.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`; // default only — your .env LLM_LIGHT wins
 const db = openDb();
 const profile = loadProfile();

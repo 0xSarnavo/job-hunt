@@ -41,7 +41,8 @@ import { ingest } from "../src/ingest.ts";
 import { loadProfile } from "../src/profile.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`; // default only — your .env LLM_LIGHT wins
 const actor = process.env.JOBHUNT_ACTOR || "cron";
 const db = openDb();

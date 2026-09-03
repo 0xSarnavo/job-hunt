@@ -13,7 +13,8 @@ import { extract } from "../src/llm.ts";
 import { loadProfile, profileBrief } from "../src/profile.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 process.env.LLM_LIGHT ??= `opencode run -m ${MODEL}`; // default only — your .env LLM_LIGHT wins
 
 const Fit = z.object({

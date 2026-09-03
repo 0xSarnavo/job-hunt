@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "bin": {
+    "jobhunt": "./bin/jobhunt"
+  },
   "scripts": {
     "daily": "bash scripts/run-daily.sh",
     "cli": "tsx src/cli.ts",

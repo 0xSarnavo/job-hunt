@@ -1,9 +1,8 @@
 // Sets up the Twenty CRM data model to mirror the SQLite schema (PLAN §9).
 // Idempotent: skips fields that already exist. Run: npm run setup-crm
 
-try {
-  process.loadEnvFile(".env");
-} catch {}
+import { loadEnv } from "./env.ts";
+loadEnv();
 
 const URL_ = process.env.TWENTY_URL;
 const KEY = process.env.TWENTY_API_KEY;

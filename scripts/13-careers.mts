@@ -61,13 +61,20 @@ const BOARD_URL: Record<AtsKind, (t: string) => string> = {
 };
 const BIG5 = new Set(Object.keys(BOARD_URL));
 
-// CRM-pushed portfolio companies, geography-fit first, never rechecked twice.
+// Candidates: companies YOU added (CLI or CRM) first, then CRM-pushed portfolio
+// companies geography-fit first. Never rechecked twice.
 const rows = db.prepare(`
-  SELECT * FROM portfolio_companies pc
-  WHERE pc.domain IS NOT NULL
-    AND EXISTS (SELECT 1 FROM lookups WHERE key = 'crm:link:' || pc.program || ':' || lower(pc.name))
-    AND NOT EXISTS (SELECT 1 FROM lookups WHERE key = 'careers-check:' || pc.domain)
-  ORDER BY CASE pc.program WHEN 'blr-map' THEN 0 WHEN 'yc' THEN 1 WHEN 'a16z' THEN 2 ELSE 3 END, pc.first_seen DESC
+  SELECT * FROM (
+    SELECT c.name, c.domain, 'manual' AS program, c.first_seen FROM companies c
+    WHERE c.source IN ('manual','crm-manual') AND c.domain LIKE '%.%'
+      AND NOT EXISTS (SELECT 1 FROM lookups WHERE key = 'careers-check:' || c.domain)
+    UNION ALL
+    SELECT pc.name, pc.domain, pc.program, pc.first_seen FROM portfolio_companies pc
+    WHERE pc.domain IS NOT NULL
+      AND EXISTS (SELECT 1 FROM lookups WHERE key = 'crm:link:' || pc.program || ':' || lower(pc.name))
+      AND NOT EXISTS (SELECT 1 FROM lookups WHERE key = 'careers-check:' || pc.domain)
+  )
+  ORDER BY CASE program WHEN 'manual' THEN -1 WHEN 'blr-map' THEN 0 WHEN 'yc' THEN 1 WHEN 'a16z' THEN 2 ELSE 3 END, first_seen DESC
   LIMIT ?`).all(PER_RUN) as any[];
 
 console.log(`careers-checking ${rows.length} companies: ${rows.map((r) => r.name).join(", ")}`);

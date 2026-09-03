@@ -139,6 +139,10 @@ The CRM is an input too, not only a mirror:
   are the templates.
 - `13-careers` adds every ATS board it discovers as a Company Board portal, so your watchlist
   grows by itself.
+- Use **+ New** on Companies, People, or Opportunities freely: `16-crm-pull` absorbs anything
+  without an Actor into the pipeline each run — companies get careers-checked (yours first),
+  people get a persona tier, roles get scored. `jobhunt add` does the same from the terminal
+  with a guided form.
 
 ## What's free, what's optional
 

@@ -162,8 +162,45 @@ async function runSetup(): Promise<void> {
 }
 
 // ---------- status ----------
+const bar = (done: number, total: number): string => {
+  done = Math.min(done, total);
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const filled = Math.round((pct / 100) * 30);
+  return `[${"█".repeat(filled)}${"░".repeat(30 - filled)}] ${String(pct).padStart(3)}%  ${done}/${total}`;
+};
+
 async function runStatus(): Promise<void> {
   const db = openDb();
+
+  console.log("\nprogress — done vs left:");
+  const one = (sql: string) => (db.prepare(sql).get() as any).n ?? 0;
+  const rows: [string, number, number][] = [
+    ["judge (llm score)",
+      one("SELECT sum(llm_score IS NOT NULL) n FROM jobs WHERE rejected IS NULL AND match_score>=50"),
+      one("SELECT count(*) n FROM jobs WHERE rejected IS NULL AND match_score>=50")],
+    ["careers 1st-check",
+      one("SELECT count(*) n FROM lookups WHERE key LIKE 'careers-check:%'"),
+      one(`SELECT count(*) n FROM portfolio_companies pc WHERE pc.domain IS NOT NULL
+           AND EXISTS (SELECT 1 FROM lookups WHERE key='crm:link:'||pc.program||':'||lower(pc.name))`)],
+    ["board re-scans (7d)",
+      one("SELECT count(*) n FROM lookups WHERE key LIKE 'board-scan:%' AND json_extract(result,'$.at') > datetime('now','-7 days')"),
+      one(`SELECT count(*) n FROM companies WHERE ats IN ('greenhouse','lever','ashby','workable','smartrecruiters') AND ats_token IS NOT NULL`)],
+    ["people coverage",
+      one("SELECT count(DISTINCT lower(company)) n FROM people"),
+      one(`SELECT count(*) n FROM (SELECT name FROM companies WHERE pitch=1
+           UNION SELECT DISTINCT company FROM jobs WHERE rejected IS NULL AND match_score>=50 AND llm_score>=50)`)],
+    ["backfill feeds done",
+      one("SELECT count(*) n FROM lookups WHERE key LIKE 'backfill:cursor:%' AND result LIKE '%done%'"),
+      9],
+    ["portfolio → CRM",
+      one("SELECT count(*) n FROM lookups WHERE key LIKE 'crm:link:%'"),
+      one(`SELECT count(*) n FROM portfolio_companies WHERE
+           (program='yc' AND status='Active' AND lower(batch) IN ('fall 2026','summer 2026','spring 2026','winter 2026'))
+           OR (program='a16z' AND status LIKE '%Active%')
+           OR (program='blr-map' AND lower(batch) IN ('pre-seed','seed','series a') AND domain IS NOT NULL)`)],
+  ];
+  for (const [name, done, total] of rows) console.log(`  ${name.padEnd(20)} ${bar(done, total)}`);
+
   console.log("\nlocal (SQLite):");
   for (const t of ["jobs", "companies", "people", "portfolio_companies"]) {
     const { n } = db.prepare(`SELECT count(*) n FROM ${t}`).get() as { n: number };

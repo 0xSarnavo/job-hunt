@@ -125,6 +125,7 @@ const companies = ([
     ORDER BY llm_score DESC`).all(),
 ] as any[])
   .filter((c) => { const k = c.company.toLowerCase(); if (seen.has(k) || AGGREGATORS.has(k)) return false; seen.add(k); return true; })
+  .filter((c) => !(db.prepare("SELECT 1 FROM feedback WHERE kind='company' AND lower(ref)=lower(?)").get(c.company))) // you said no
   .filter((c) => !(db.prepare("SELECT 1 FROM people WHERE lower(company)=lower(?) LIMIT 1").get(c.company)))
   .filter((c) => !(db.prepare("SELECT 1 FROM lookups WHERE key = ?").get(`crm:people:${c.company.toLowerCase()}`)))
   .slice(0, COMPANIES_PER_RUN);

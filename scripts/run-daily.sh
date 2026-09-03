@@ -6,15 +6,20 @@
 cd "$(dirname "$0")/.."
 
 # -- signals in --------------------------------------------------------------
-npx tsx scripts/1-fetch.mts         # job portals (incl. CRM-added boards), incremental
-npx tsx scripts/7-funded.mts        # funding RSS (US/EU/India/AU) -> 5-50 headcount pitch targets
-npx tsx scripts/14-backfill.mts     # 2-year archive backfill, one bounded chunk per day
+# 1-fetch, 7-funded, 14-backfill touch different sources — run them in parallel
+# (SQLite busy_timeout makes concurrent writers safe; CRM-heavy steps stay serial
+# because Twenty's rate limit is shared).
+npx tsx scripts/1-fetch.mts &       # job portals (incl. CRM-added boards), incremental
+npx tsx scripts/7-funded.mts &      # funding RSS (US/EU/India/AU) -> 5-50 headcount pitch targets
+npx tsx scripts/14-backfill.mts &   # 2-year archive backfill, one bounded chunk per day
+wait
 npx tsx scripts/11-vc-companies.mts # latest YC batch -> active pitch targets
 npx tsx scripts/12-portfolios.mts   # investor programs + portfolio companies -> CRM
 npx tsx scripts/13-careers.mts      # portfolio companies' careers pages -> ATS + matching roles
 
 # -- judge + prep ------------------------------------------------------------
-npx tsx scripts/2-llm-score.mts     # free-model judge on new matches
+npx tsx scripts/15-feedback.mts     # pull YOUR irrelevant-marks from the CRM first
+npx tsx scripts/2-llm-score.mts     # free-model judge on new matches (quotes your verdicts)
 npx tsx scripts/3-cv-briefs.mts     # CV-tailoring briefs for double-passed jobs
 npx tsx scripts/4-sync.mts          # matched jobs -> Twenty CRM kanban
 

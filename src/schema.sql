@@ -74,6 +74,19 @@ CREATE TABLE IF NOT EXISTS portfolio_companies (
   PRIMARY KEY (program, name)
 );
 
+-- Your verdicts from the CRM (stage=CLOSED / Feedback Note fields), pulled by
+-- scripts/15-feedback.mts. The judge quotes recent reasons so it stops
+-- suggesting the same kind of thing.
+CREATE TABLE IF NOT EXISTS feedback (
+  kind    TEXT NOT NULL,           -- opportunity | company
+  ref     TEXT NOT NULL,           -- job url or company name
+  company TEXT,
+  title   TEXT,
+  reason  TEXT,
+  at      TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (kind, ref)
+);
+
 CREATE TABLE IF NOT EXISTS lookups (
   key         TEXT PRIMARY KEY,  -- e.g. "hunter:jane@acme.com", "fetch:https://..."
   provider    TEXT,

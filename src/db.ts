@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const VERSION = 6;
+const VERSION = 7;
 
 // Everything generated lives under data/ (gitignored — the repo is public).
 export const DB_PATH = process.env.JOBHUNT_DB ?? "data/jobhunt.db";
@@ -12,6 +12,7 @@ export function openDb(path = DB_PATH): Database.Database {
   if (path !== ":memory:") mkdirSync(dirname(path) || ".", { recursive: true });
   const db = new Database(path);
   db.pragma("journal_mode = WAL");
+  db.pragma("busy_timeout = 30000"); // parallel pipeline steps wait for the lock instead of crashing
   const schema = readFileSync(
     join(dirname(fileURLToPath(import.meta.url)), "schema.sql"),
     "utf8",
@@ -26,6 +27,7 @@ export function openDb(path = DB_PATH): Database.Database {
   if (v > 0 && v < 5)
     db.exec("ALTER TABLE companies ADD COLUMN pitch INTEGER DEFAULT 0");
   // v6: portfolio_companies table + data/ home — both handled by schema.sql / DB_PATH
+  // v7: feedback table — handled by schema.sql
   db.pragma(`user_version = ${VERSION}`);
   return db;
 }

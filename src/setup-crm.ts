@@ -40,6 +40,7 @@ const MODEL: Record<string, FieldSpec[]> = {
     { name: "signalSource", label: "Signal Source", type: "TEXT", description: "where we first saw this company (entrackr, hn, remotive, ...)" },
     { name: "research", label: "Research", type: "TEXT", description: "what they do + what the candidate can do for them (step 6 output)" },
     { name: "headcount", label: "Headcount", type: "NUMBER", description: "employee count (Apollo enrich / YC directory team size)" },
+    { name: "feedbackNote", label: "Feedback Note", type: "TEXT", description: "why this company is irrelevant — 15-feedback pulls it and the pipeline stops suggesting similar" },
   ],
   person: [
     { name: "actor", label: "Actor", type: "TEXT" },
@@ -70,6 +71,7 @@ const MODEL: Record<string, FieldSpec[]> = {
     { name: "channel", label: "Channel", type: "SELECT", options: `[${[
       opt("EMAIL", "Email", "blue", 0), opt("LINKEDIN", "LinkedIn", "sky", 1),
       opt("BOTH", "Both", "green", 2)].join(",")}]` },
+    { name: "feedbackNote", label: "Feedback Note", type: "TEXT", description: "why this role is irrelevant (move to CLOSED too) — 15-feedback pulls it and the judge learns" },
   ],
 };
 

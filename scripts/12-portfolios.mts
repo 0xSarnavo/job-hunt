@@ -315,8 +315,16 @@ for (let i = 0; i < queue.length; i += 40) {
     for (const item of chunk) {
       const one = await twenty("POST", "companies", item.body);
       const id = one?.data?.createCompany?.id;
-      if (id) record(item, id);
-      else console.error(`  skip ${item.row.name}: rejected individually`);
+      if (id) { record(item, id); continue; }
+      // duplicate name → the company already exists via another source: link it instead
+      const existing = await twenty("GET",
+        `companies?filter=${encodeURIComponent(`name[eq]:"${item.row.name.replaceAll('"', "")}"`)}&limit=1`);
+      const dupId = existing?.data?.companies?.[0]?.id;
+      if (dupId) {
+        const ok = await twenty("PATCH", `companies/${dupId}`, { investorPortfolioId: item.body.investorPortfolioId });
+        if (ok) { record(item, dupId); console.log(`  linked existing record for ${item.row.name}`); continue; }
+      }
+      console.error(`  skip ${item.row.name}: rejected individually`);
     }
   }
   console.log(`  pushed ${Math.min(i + 40, queue.length)}/${queue.length}`);

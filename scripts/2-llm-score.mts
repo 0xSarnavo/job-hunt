@@ -24,7 +24,16 @@ const Fit = z.object({
 const EXAMPLE = { score: 62, reason: "DevRel role at AI devtools startup, remote-global, asks 3y vs 2.5y — strong fit." };
 
 // Judge context comes from YOUR profile.yaml — nothing personal is hardcoded here.
-const PROFILE = profileBrief(loadProfile());
+// Recent CRM verdicts (15-feedback) are quoted so the judge stops suggesting
+// what you already marked irrelevant.
+const db0 = openDb();
+const verdicts = db0.prepare(
+  "SELECT company, title, reason FROM feedback ORDER BY at DESC LIMIT 12",
+).all() as any[];
+const PROFILE = profileBrief(loadProfile()) + (verdicts.length
+  ? `\nThe candidate recently marked these as IRRELEVANT — score similar roles low:\n` +
+    verdicts.map((v) => `- ${[v.title, v.company].filter(Boolean).join(" @ ")}: ${v.reason}`).join("\n")
+  : "");
 
 const db = openDb();
 const jobs = db.prepare(

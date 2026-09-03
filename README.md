@@ -176,5 +176,5 @@ never leave `data/`, `profile.yaml`, and your CRM.
 ## Knobs
 
 Every script opens with a Knobs block (batch sizes, models, caps). Env overrides:
-`LLM_LIGHT`, `LLM_HEAVY`, `JOBHUNT_DB`, `PORTFOLIO_YC_BATCHES`, `PORTFOLIO_PUSH_MAX`,
+`LLM_LIGHT`, `LLM_HEAVY`, `JOBHUNT_DB`, `PORTFOLIO_YC_SINCE`, `PORTFOLIO_PUSH_MAX`,
 `CAREERS_PER_RUN`, `CAREERS_RESCAN`, `PEOPLE_PER_RUN`, `BACKFILL_DAYS`, `VC_QUERIES`.

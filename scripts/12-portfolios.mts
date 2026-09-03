@@ -6,14 +6,13 @@
 //    a16z via the JSON embedded in a16z.com/portfolio. FULL lists land in the
 //    local portfolio_companies table.
 // 3. Pushes the relevant slice to CRM Companies (batch API, linked to their
-//    Investor Portfolio record): YC = active companies of PORTFOLIO_YC_BATCHES,
+//    Investor Portfolio record): YC = active companies from PORTFOLIO_YC_SINCE (default 2021) onward,
 //    a16z = active portfolio.
 // 4. Refreshes counts on portal/portfolio records and writes
 //    data/portfolio-companies.md — the full human-readable list.
 //
 // Knobs:
-const YC_BATCHES = (process.env.PORTFOLIO_YC_BATCHES ?? "Fall 2026,Summer 2026,Spring 2026,Winter 2026")
-  .split(",").map((s) => s.trim().toLowerCase());
+const YC_SINCE = Number(process.env.PORTFOLIO_YC_SINCE ?? 2021); // active YC companies from this batch year onward
 const PUSH_MAX = Number(process.env.PORTFOLIO_PUSH_MAX ?? 500); // new CRM companies per run (resumes next run)
 
 import { execFileSync } from "node:child_process";
@@ -247,8 +246,8 @@ const pushRows = [
     ? db.prepare(`SELECT * FROM portfolio_companies WHERE program IN (${userPortfolios.map(() => "?").join(",")}) AND domain IS NOT NULL`)
         .all(...userPortfolios.map((u) => u.slug))
     : []),
-  ...db.prepare(`SELECT * FROM portfolio_companies WHERE program='yc' AND status='Active'`).all()
-    .filter((r: any) => YC_BATCHES.includes((r.batch ?? "").toLowerCase())),
+  ...db.prepare(`SELECT * FROM portfolio_companies WHERE program='yc' AND status='Active'
+                 AND CAST(substr(batch,-4) AS INT) >= ?`).all(YC_SINCE),
   ...db.prepare(`SELECT * FROM portfolio_companies WHERE program='a16z' AND status LIKE '%Active%'`).all(),
   // Bangalore map: early-stage only (founder still reachable), needs a website
   ...db.prepare(`SELECT * FROM portfolio_companies WHERE program='blr-map'

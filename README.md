@@ -25,6 +25,7 @@ jobhunt daily                    # then this, once a day
 | `jobhunt check` | verifies keys, LLM CLIs, DB, CRM data model; every ✗ names its fix |
 | `jobhunt daily` | runs the whole pipeline |
 | `jobhunt people` | finds more people to reach (`--max 50` for a bigger batch) |
+| `jobhunt add` | guided form: log a connection (`add person`) or a role you found (`add role`) |
 | `jobhunt status` | progress bars, counts, and what's pending |
 
 ## How it works

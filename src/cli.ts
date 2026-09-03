@@ -229,6 +229,135 @@ async function runStatus(): Promise<void> {
   console.log();
 }
 
+// ---------- add: guided forms for manual entries ----------
+const twentyRest = async (method: string, path: string, body?: unknown): Promise<any | null> => {
+  const U = process.env.TWENTY_URL, K = process.env.TWENTY_API_KEY;
+  if (!U || !K) return null;
+  await new Promise((r) => setTimeout(r, 700));
+  try {
+    const res = await fetch(`${U}/rest/${path}`, {
+      method, headers: { Authorization: `Bearer ${K}`, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30_000),
+    });
+    return res.ok ? res.json() : (console.error(`  crm ${method} ${path}: ${res.status}`), null);
+  } catch (e) { console.error(`  crm: ${String(e).slice(0, 80)}`); return null; }
+};
+
+async function pickCompany(rl: readline.Interface): Promise<{ id: string | null; name: string; domain: string | null } | null> {
+  const q = (await rl.question("company (type to search): ")).trim();
+  if (!q) return null;
+  const hits = (await twentyRest("GET",
+    `companies?filter=${encodeURIComponent(`name[ilike]:"%${q.replaceAll('"', "")}%"`)}&limit=8`))?.data?.companies ?? [];
+  if (hits.length) {
+    hits.forEach((c: any, i: number) => console.log(`  ${i + 1}) ${c.name}${c.domainName?.primaryLinkUrl ? `  (${c.domainName.primaryLinkUrl})` : ""}`));
+    console.log(`  n) new company "${q}"`);
+    const pick = (await rl.question("pick [1-8/n]: ")).trim();
+    const idx = parseInt(pick, 10);
+    if (idx >= 1 && idx <= hits.length) {
+      const c = hits[idx - 1];
+      return { id: c.id, name: c.name, domain: c.domainName?.primaryLinkUrl?.replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, "") || null };
+    }
+  } else console.log(`  no CRM match for "${q}" — creating new`);
+  const domain = (await rl.question("company website/domain (optional): ")).trim()
+    .replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, "") || null;
+  const created = await twentyRest("POST", "companies", {
+    name: q, actor: "human", signalSource: "manual",
+    ...(domain ? { domainName: { primaryLinkUrl: `https://${domain}` } } : {}),
+  });
+  const id = created?.data?.createCompany?.id ?? null;
+  if (id) {
+    const db = openDb();
+    db.prepare("INSERT OR IGNORE INTO companies (domain, name, source) VALUES (?, ?, 'manual')")
+      .run(domain ?? q.toLowerCase().replace(/[^a-z0-9]/g, ""), q);
+    db.prepare("INSERT OR REPLACE INTO lookups (key, provider, result, cost) VALUES (?, 'twenty', ?, 0)")
+      .run(`crm:company:${q.toLowerCase()}`, JSON.stringify({ id }));
+    console.log(`  + company created: ${q}`);
+  }
+  return { id, name: q, domain };
+}
+
+async function runAddPerson(): Promise<void> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  console.log("\nLog a connection — everything lands in the CRM + local DB.\n");
+  const comp = await pickCompany(rl);
+  if (!comp) { rl.close(); return; }
+  const name = (await rl.question("person's name: ")).trim();
+  if (!name) { rl.close(); return; }
+  const title = (await rl.question("their position/title: ")).trim();
+  const linkedin = (await rl.question("linkedin URL (optional): ")).trim();
+  console.log("how did you reach out?  1) not yet  2) connect request sent  3) messaged  4) they replied");
+  const how = (await rl.question("pick [1-4]: ")).trim();
+  const stage = ({ "1": "QUEUED", "2": "CONNECTED", "3": "TOUCH_1", "4": "REPLIED" } as Record<string, string>)[how] ?? "QUEUED";
+  const note = (await rl.question("note for yourself (optional): ")).trim();
+  rl.close();
+
+  const persona =
+    /founder|co-founder|ceo|cto|chief/i.test(title) ? "FOUNDER" :
+    /head|director|lead|vp|manager/i.test(title) ? "HIRING_MANAGER" :
+    /recruit|talent/i.test(title) ? "RECRUITER" : "PEER";
+  const created = await twentyRest("POST", "people", {
+    name: { firstName: name.split(" ")[0], lastName: name.split(" ").slice(1).join(" ") || "-" },
+    jobTitle: title, personaTier: persona, outreachStage: stage, fetchEmail: "NO", actor: "human",
+    ...(linkedin ? { linkedinLink: { primaryLinkUrl: linkedin } } : {}),
+    ...(stage !== "QUEUED" ? { lastTouchAt: new Date().toISOString() } : {}),
+    ...(note ? { dmDraft: note } : {}),
+    ...(comp.id ? { companyId: comp.id } : {}),
+  });
+  try {
+    openDb().prepare("INSERT INTO people (company, name, title, persona_tier, linkedin, provenance) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(comp.name, name, title, persona.toLowerCase(), linkedin || null, JSON.stringify({ source: "manual", at: new Date().toISOString() }));
+  } catch { /* already known locally */ }
+  console.log(created ? `\n✓ ${name} @ ${comp.name} added (${stage.toLowerCase().replace("_", " ")}).` : "\n✗ CRM write failed — check `jobhunt check`.");
+}
+
+async function runAddRole(): Promise<void> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  console.log("\nLog a role you found — scored, stored, and put on the kanban.\n");
+  const comp = await pickCompany(rl);
+  if (!comp) { rl.close(); return; }
+  const title = (await rl.question("role title: ")).trim();
+  if (!title) { rl.close(); return; }
+  const url = (await rl.question("job URL (optional): ")).trim()
+    || `manual:${comp.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  const location = (await rl.question("location (optional): ")).trim();
+  console.log("where is it?  1) just found it  2) already applied  3) interviewing");
+  const st = (await rl.question("pick [1-3]: ")).trim();
+  const stage = ({ "1": "QUEUED", "2": "APPLIED", "3": "INTERVIEWING" } as Record<string, string>)[st] ?? "QUEUED";
+  rl.close();
+
+  const profile = loadProfile();
+  const v = score({ source: "manual", company: comp.name, title, url, location, description: "" }, profile);
+  const db = openDb();
+  db.prepare(`INSERT OR REPLACE INTO jobs (url, company, title, location, source, description, match_score, matched_at, rejected)
+              VALUES (?, ?, ?, ?, 'manual', '', ?, datetime('now'), NULL)`)
+    .run(url, comp.name, title, location, v.score);
+  const opp = await twentyRest("POST", "opportunities", {
+    name: `${comp.name} — ${title}`.slice(0, 250), stage, jobTitle: title, jobUrl: url,
+    matchScore: Math.round(v.score), actor: "human",
+    ...(comp.id ? { companyId: comp.id } : {}),
+  });
+  const oppId = opp?.data?.createOpportunity?.id;
+  if (oppId)
+    db.prepare("INSERT OR REPLACE INTO lookups (key, provider, result, cost) VALUES (?, 'twenty', ?, 0)")
+      .run(`crm:opp:${url}`, JSON.stringify({ id: oppId }));
+  console.log(oppId
+    ? `\n✓ ${title} @ ${comp.name} on the kanban (${stage}, rubric score ${v.score}).`
+    : "\n✗ CRM write failed — the role is stored locally; sync will retry.");
+}
+
+async function runAdd(what?: string): Promise<void> {
+  let choice = what;
+  if (!choice) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    console.log("\nadd what?  1) person (a connection)  2) role (a job you found)");
+    const pick = (await rl.question("pick [1-2]: ")).trim();
+    rl.close();
+    choice = pick === "2" ? "role" : "person";
+  }
+  if (/^r/i.test(choice)) await runAddRole();
+  else await runAddPerson();
+}
+
 // ---------- menu ----------
 async function menu(): Promise<void> {
   console.log(`
@@ -239,15 +368,17 @@ job-hunt — what do you want to do?
   3) daily    run today's full pipeline
   4) people   find more people to reach
   5) status   what's stored, what's in the CRM, what's pending
+  6) add      log something manually: a connection or a role you found
 `);
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const pick = (await rl.question("pick [1-5]: ")).trim();
+  const pick = (await rl.question("pick [1-6]: ")).trim();
   rl.close();
   const map: Record<string, () => Promise<void> | void> = {
     "1": runSetup, "2": async () => { await runCheck(); },
     "3": () => { spawnSync("bash", ["scripts/run-daily.sh"], { stdio: "inherit" }); },
     "4": () => { runScript("scripts/5-people.mts", { PEOPLE_PER_RUN: "20" }); },
     "5": runStatus,
+    "6": () => runAdd(),
   };
   if (map[pick]) await map[pick]!();
   else console.log("nothing picked — bye.");
@@ -265,6 +396,8 @@ program.command("people").description("find people to reach (Fiber first, free)"
   .option("--max <n>", "companies this run", "20")
   .action((opts: { max: string }) => { runScript("scripts/5-people.mts", { PEOPLE_PER_RUN: opts.max }); });
 program.command("status").description("local + CRM counts and pending work").action(runStatus);
+program.command("add [what]").description("log a connection or a role by hand: `add person` / `add role` (guided)")
+  .action(async (what?: string) => { await runAdd(what); });
 
 // --- advanced verbs (the original building blocks) ---
 program

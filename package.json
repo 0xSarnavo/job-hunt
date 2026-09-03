@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "daily": "bash scripts/run-daily.sh",
     "cli": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/*.test.ts",

@@ -7,7 +7,7 @@
 // crm:people:<company> marker in lookups → skip; search results cached forever.
 //
 // Knobs:
-const COMPANIES_PER_RUN = 5;
+const COMPANIES_PER_RUN = Number(process.env.PEOPLE_PER_RUN ?? 5); // TinyFish search: 500/hr free — 2 per company
 const MODEL = "opencode/mimo-v2.5-free";
 
 import { execFileSync } from "node:child_process";

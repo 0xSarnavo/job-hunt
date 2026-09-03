@@ -131,8 +131,11 @@ try {
   console.log(`a16z: ${companies.length} companies in portfolio`);
 } catch (err) { console.error(`a16z scrape failed: ${String(err).slice(0, 150)}`); }
 
-// Bangalore Startup Map — 880+ startups (+70 VCs, skipped) embedded as JSON in
-// the Next.js flight payload of the homepage.
+// Bangalore Startup Map — 880+ startups AND ~70 VC firms embedded as JSON in
+// the Next.js flight payload of the homepage. Startups become portfolio
+// companies; the VC firms become Investor Portfolio records (coffee-meeting
+// targets — the map has their office area).
+let blrVcs: any[] = [];
 try {
   const res = await fetch("https://www.bangalorestartupmap.com/", {
     headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" },
@@ -156,6 +159,7 @@ try {
   }
   const entries = JSON.parse(flight.slice(start + key.length - 1, close + 1)) as any[];
   const startups = entries.filter((e) => e.kind === "startup" && e.name);
+  blrVcs = entries.filter((e) => e.kind === "vc" && e.name);
   const tx = db.transaction((rows: any[]) => { for (const r of rows) upsert.run(r); });
   tx(startups.map((c) => ({
     program: "blr-map", name: c.name, domain: domainOf(c.website),
@@ -180,13 +184,28 @@ for (const p of PORTFOLIOS) {
 }
 console.log(`portfolios: ${PORTFOLIOS.length} programs in CRM`);
 
+// Bengaluru VC firms from the map → Investor Portfolio records (created once).
+const portfolioByName = new Map(portfolioRecords.map((p: any) => [p.name, p]));
+let vcAdded = 0;
+for (const v of blrVcs) {
+  if (portfolioByName.has(v.name) || cacheGet(db, `crm:blrvc:${v.name.toLowerCase()}`)) continue;
+  const created = await twenty("POST", "investorPortfolios", {
+    name: v.name, kind: "VC", scrapeStatus: "PLANNED", actor,
+    notes: [`Bengaluru (${v.area ?? "?"})`, v.tagline, v.hsr_location].filter(Boolean).join(" · ").slice(0, 250),
+    ...(v.website ? { portfolioUrl: { primaryLinkUrl: v.website, primaryLinkLabel: "Site" } } : {}),
+  });
+  const id = created?.data?.createInvestorPortfolio?.id;
+  if (id) { cachePut(db, `crm:blrvc:${v.name.toLowerCase()}`, "twenty", { id }); vcAdded++; }
+}
+if (blrVcs.length) console.log(`blr-map VCs: ${vcAdded} new Investor Portfolio records (of ${blrVcs.length} on the map)`);
+
 // ---------- 3b. portfolios YOU added in the CRM ----------
-// Any Investor Portfolio record whose name isn't in src/registry.ts counts as
-// user-added: its Portfolio URL is fetched and companies extracted with the
+// A record with no `actor` was created by hand in the CRM (every pipeline write
+// stamps actor): its Portfolio URL is fetched and companies extracted with the
 // free model (best effort — clean directory pages work, heavy JS apps won't).
 const registryNames = new Set(PORTFOLIOS.map((p) => p.name));
 const userPortfolios: { name: string; url: string; slug: string }[] = portfolioRecords
-  .filter((p: any) => !registryNames.has(p.name) && p.portfolioUrl?.primaryLinkUrl)
+  .filter((p: any) => !p.actor && !registryNames.has(p.name) && p.portfolioUrl?.primaryLinkUrl)
   .map((p: any) => ({ name: p.name as string, url: p.portfolioUrl.primaryLinkUrl as string,
                       slug: "crm-" + p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") }));
 const DirCompanies = z.object({

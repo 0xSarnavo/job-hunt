@@ -15,7 +15,7 @@ git clone https://github.com/0xSarnavo/job-hunt && cd job-hunt
 npm install
 cp .env.example .env                       # fill in the keys you have — missing ones just disable that step
 cp profile.example.yaml profile.yaml       # YOUR target roles, dealbreakers, proof points
-bash scripts/run-daily.sh                  # or run the numbered scripts one at a time
+npm run daily                              # the whole pipeline — run this every day
 ```
 
 Every external dependency is optional and degrades gracefully:

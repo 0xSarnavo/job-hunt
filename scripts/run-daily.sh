@@ -8,6 +8,7 @@ cd "$(dirname "$0")/.."
 # -- signals in --------------------------------------------------------------
 npx tsx scripts/1-fetch.mts         # job portals (incl. CRM-added boards), incremental
 npx tsx scripts/7-funded.mts        # funding RSS (US/EU/India/AU) -> 5-50 headcount pitch targets
+npx tsx scripts/14-backfill.mts     # 2-year archive backfill, one bounded chunk per day
 npx tsx scripts/11-vc-companies.mts # latest YC batch -> active pitch targets
 npx tsx scripts/12-portfolios.mts   # investor programs + portfolio companies -> CRM
 npx tsx scripts/13-careers.mts      # portfolio companies' careers pages -> ATS + matching roles

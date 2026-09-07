@@ -15,7 +15,7 @@ today=$(date +%F)
 [ "$(date +%-H)" -lt "$EARLIEST_HOUR" ] && exit 0
 [ "$(cat "$STAMP" 2>/dev/null)" = "$today" ] && exit 0
 
-read -r att_day att_n < "$ATTEMPTS" 2>/dev/null
+[ -r "$ATTEMPTS" ] && read -r att_day att_n < "$ATTEMPTS"
 [ "$att_day" = "$today" ] || att_n=0
 if [ "${att_n:-0}" -ge "$MAX_ATTEMPTS" ]; then
   # already tried MAX_ATTEMPTS times today; give up quietly until tomorrow

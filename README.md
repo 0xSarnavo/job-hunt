@@ -216,8 +216,13 @@ The CRM is an input too, not only a mirror:
   it leaks.
 - **Nothing sends itself.** Emails become Gmail drafts, connect notes become a list.
   A bug in this pipeline can waste API quota; it cannot message a founder as you.
-- **The CRM login** is your own instance's account, stored in your own database — it
-  exists so the API needs a key, not because anyone else can see the data.
+- **The CRM answers only on your own machine** — the port is bound to 127.0.0.1, so
+  other devices on your network can't reach it, and sign-up is disabled so no second
+  account can be created. Still give your account a real password: the CRM is a write
+  path into the pipeline (what it fetches, what lands in drafts).
+- **The daily run cleans up after itself**: if it started Docker and the CRM, it stops
+  them when done, so an unattended run costs zero RAM afterwards. Containers are also
+  memory-capped (`docker-compose.crm.yml`) so a busy run can't squeeze the machine.
 
 ## What's free, what's optional
 

@@ -23,5 +23,20 @@ if [ "${att_n:-0}" -ge "$MAX_ATTEMPTS" ]; then
 fi
 echo "$today $((att_n + 1))" > "$ATTEMPTS"
 
+# Remember what was already running: if YOU had the CRM (or Docker) open, the
+# run leaves them alone. If the run started them, it shuts them down after, so
+# an unattended daily costs zero RAM once finished. KEEP_CRM_UP=1 disables this.
+docker_was_up=0 crm_was_up=0
+docker info >/dev/null 2>&1 && docker_was_up=1
+[ "$docker_was_up" = 1 ] && docker compose -f docker-compose.crm.yml ps --status running 2>/dev/null | grep -q crm-server && crm_was_up=1
+
 echo "=== daily run starting $(date) (attempt $((att_n + 1))/$MAX_ATTEMPTS) ==="
 bash scripts/run-daily.sh && date +%F > "$STAMP"
+
+if [ "$crm_was_up" = 0 ] && [ "${KEEP_CRM_UP:-0}" != 1 ]; then
+  docker compose -f docker-compose.crm.yml down 2>/dev/null
+  # quit Docker Desktop only if this run started it and nothing else uses it
+  if [ "$docker_was_up" = 0 ] && [ -z "$(docker ps -q 2>/dev/null)" ]; then
+    osascript -e 'quit app "Docker Desktop"' 2>/dev/null || osascript -e 'quit app "Docker"' 2>/dev/null
+  fi
+fi

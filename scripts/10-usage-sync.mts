@@ -5,7 +5,8 @@ import { openDb } from "../src/db.ts";
 import { LIMITS } from "../src/usage.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 const db = openDb();
 db.exec(`CREATE TABLE IF NOT EXISTS usage (
   vendor TEXT NOT NULL, day TEXT NOT NULL, calls INTEGER DEFAULT 0, PRIMARY KEY (vendor, day)

@@ -16,7 +16,8 @@ import { openDb } from "../src/db.ts";
 import { apolloEnrich, cacheGet, cachePut } from "../src/enrich.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 const actor = process.env.JOBHUNT_ACTOR || "cron";
 const db = openDb();
 

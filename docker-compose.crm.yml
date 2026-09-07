@@ -1,0 +1,80 @@
+# Local Twenty CRM stack. Run on demand:
+#   docker compose -f docker-compose.crm.yml up -d     # start
+#   docker compose -f docker-compose.crm.yml down      # stop (data persists in volumes)
+# Secrets come from .env (TWENTY_APP_SECRET).
+services:
+  crm-server:
+    image: twentycrm/twenty:latest
+    mem_limit: 1g
+    ports:
+      - "127.0.0.1:3010:3000"   # loopback only — never reachable from the network
+    environment:
+      NODE_PORT: 3000
+      NODE_OPTIONS: --max-old-space-size=800
+      IS_SIGN_UP_DISABLED: "true"   # your account exists; nobody else can register
+      PG_DATABASE_URL: postgres://postgres:postgres@crm-db:5432/default
+      REDIS_URL: redis://crm-redis:6379
+      SERVER_URL: http://localhost:3010
+      APP_SECRET: ${TWENTY_APP_SECRET}
+      ENCRYPTION_KEY: ${TWENTY_APP_SECRET}
+      STORAGE_TYPE: local
+      DISABLE_DB_MIGRATIONS: "false"
+      # local single-user: sign in once, session lasts ~10 years
+      ACCESS_TOKEN_EXPIRES_IN: 30d
+      REFRESH_TOKEN_EXPIRES_IN: 3650d
+    volumes:
+      - crm-server-storage:/app/packages/twenty-server/.local-storage
+    depends_on:
+      crm-db:
+        condition: service_healthy
+      crm-redis:
+        condition: service_started
+    restart: "no"
+
+  crm-worker:
+    image: twentycrm/twenty:latest
+    mem_limit: 1g
+    command: ["yarn", "worker:prod"]
+    environment:
+      NODE_OPTIONS: --max-old-space-size=800
+      PG_DATABASE_URL: postgres://postgres:postgres@crm-db:5432/default
+      REDIS_URL: redis://crm-redis:6379
+      SERVER_URL: http://localhost:3010
+      APP_SECRET: ${TWENTY_APP_SECRET}
+      ENCRYPTION_KEY: ${TWENTY_APP_SECRET}
+      STORAGE_TYPE: local
+      DISABLE_DB_MIGRATIONS: "true"
+    volumes:
+      - crm-server-storage:/app/packages/twenty-server/.local-storage
+    depends_on:
+      crm-db:
+        condition: service_healthy
+      crm-redis:
+        condition: service_started
+    restart: "no"
+
+  crm-db:
+    image: postgres:18
+    mem_limit: 512m
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: default
+    volumes:
+      - crm-db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d default"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: "no"
+
+  crm-redis:
+    image: redis:7-alpine
+    mem_limit: 128m
+    command: ["redis-server", "--maxmemory-policy", "noeviction"]
+    restart: "no"
+
+volumes:
+  crm-db-data:
+  crm-server-storage:

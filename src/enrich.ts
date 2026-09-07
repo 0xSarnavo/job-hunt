@@ -29,6 +29,68 @@ export function companyDomain(db: Database.Database, company: string): string | 
   return domain;
 }
 
+export interface YcFounder {
+  name: string;
+  title: string;
+  linkedin_url: string;
+}
+
+function decodeEntities(s: string): string {
+  return s.replaceAll("&quot;", '"').replaceAll("&amp;", "&")
+    .replaceAll("&#039;", "'").replaceAll("&lt;", "<").replaceAll("&gt;", ">");
+}
+
+// bracket-match a JSON array starting at `start` (handles nested []/{} and strings)
+function jsonArrayAt(text: string, start: number): any[] | null {
+  let depth = 0, inStr = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) { if (ch === "\\") i++; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') inStr = true;
+    else if (ch === "[" || ch === "{") depth++;
+    else if (ch === "]" || ch === "}") {
+      depth--;
+      if (depth === 0) {
+        try { return JSON.parse(text.slice(start, i + 1)) as any[]; }
+        catch { return null; }
+      }
+    }
+  }
+  return null;
+}
+
+// YC board founders — free exact data (names, titles, LinkedIn) from the
+// public ycombinator.com company page. Plain HTTP, no vendor credits, cached forever.
+export async function ycFounders(db: Database.Database, slug: string): Promise<YcFounder[]> {
+  const key = `yc:founders:${slug.toLowerCase()}`;
+  const hit = cacheGet(db, key);
+  if (hit) return hit.founders ?? [];
+  let founders: YcFounder[] = [];
+  try {
+    await new Promise((r) => setTimeout(r, 500)); // be polite to ycombinator.com
+    const res = await fetch(`https://www.ycombinator.com/companies/${slug}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" },
+      signal: AbortSignal.timeout(45_000),
+    });
+    if (res.ok) {
+      const text = decodeEntities(await res.text());
+      const i = text.indexOf('"founders":[');
+      if (i !== -1) {
+        const arr = jsonArrayAt(text, text.indexOf("[", i));
+        founders = (arr ?? [])
+          .map((f: any) => ({
+            name: String(f.full_name ?? f.name ?? "").trim(),
+            title: String(f.title ?? "Co-Founder").slice(0, 120),
+            linkedin_url: String(f.linkedin_url ?? ""),
+          }))
+          .filter((p: YcFounder) => p.name && /linkedin\.com\/in\//i.test(p.linkedin_url));
+      }
+    }
+  } catch {}
+  cachePut(db, key, "yc-board", { founders });
+  return founders;
+}
+
 export interface OrgInfo {
   headcount: number | null;
   founded: number | null;

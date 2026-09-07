@@ -1,9 +1,8 @@
 // Sets up the Twenty CRM data model to mirror the SQLite schema (PLAN §9).
 // Idempotent: skips fields that already exist. Run: npm run setup-crm
 
-try {
-  process.loadEnvFile(".env");
-} catch {}
+import { loadEnv } from "./env.ts";
+loadEnv();
 
 const URL_ = process.env.TWENTY_URL;
 const KEY = process.env.TWENTY_API_KEY;
@@ -41,6 +40,7 @@ const MODEL: Record<string, FieldSpec[]> = {
     { name: "signalSource", label: "Signal Source", type: "TEXT", description: "where we first saw this company (entrackr, hn, remotive, ...)" },
     { name: "research", label: "Research", type: "TEXT", description: "what they do + what the candidate can do for them (step 6 output)" },
     { name: "headcount", label: "Headcount", type: "NUMBER", description: "employee count (Apollo enrich / YC directory team size)" },
+    { name: "feedbackNote", label: "Feedback Note", type: "TEXT", description: "why this company is irrelevant — 15-feedback pulls it and the pipeline stops suggesting similar" },
   ],
   person: [
     { name: "actor", label: "Actor", type: "TEXT" },
@@ -53,6 +53,11 @@ const MODEL: Record<string, FieldSpec[]> = {
     { name: "emailProvenance", label: "Email Provenance", type: "TEXT", description: "vendor + confidence, e.g. prospeo:82 verified 2026-09-01" },
     { name: "linkedinNote", label: "LinkedIn Note", type: "TEXT", description: "drafted connect note, ≤300 chars (LinkedIn's cap)" },
     { name: "dmDraft", label: "DM Draft", type: "TEXT", description: "≤150-word message for after they accept" },
+    { name: "linkedinActive", label: "LinkedIn Active", type: "SELECT", options: `[${[
+      opt("ACTIVE", "Active", "green", 0), opt("DORMANT", "Dormant", "yellow", 1),
+      opt("UNKNOWN", "Unknown", "gray", 2)].join(",")}]`, description: "posted recently (5b-active fills this; UNKNOWN = unchecked)" },
+    { name: "lastActive", label: "Last Active", type: "DATE_TIME", description: "last LinkedIn post/activity date" },
+    { name: "activeSource", label: "Active Source", type: "TEXT", description: "free-signal|fiber-posts|fiber-live|manual" },
     { name: "fetchEmail", label: "Fetch Email", type: "SELECT", options: `[${[
       opt("NO", "No", "gray", 0), opt("YES", "Yes — fetch", "blue", 1),
       opt("DONE", "Done", "green", 2), opt("FAILED", "Failed", "red", 3)].join(",")}]` },
@@ -71,15 +76,28 @@ const MODEL: Record<string, FieldSpec[]> = {
     { name: "channel", label: "Channel", type: "SELECT", options: `[${[
       opt("EMAIL", "Email", "blue", 0), opt("LINKEDIN", "LinkedIn", "sky", 1),
       opt("BOTH", "Both", "green", 2)].join(",")}]` },
+    { name: "feedbackNote", label: "Feedback Note", type: "TEXT", description: "why this role is irrelevant (move to CLOSED too) — 15-feedback pulls it and the judge learns" },
   ],
 };
 
-// Outreach pipeline states for the opportunity kanban (mirrors touches.state).
+// Outreach pipeline states for the opportunity kanban.
+// SENT → (no reply, 3 touches max) → STOPPED happens automatically (8-followups);
+// APPLIED / INTERVIEWING / OFFER you move yourself as things progress.
 const STAGE_OPTIONS = `[${[
   opt("QUEUED", "Queued", "gray", 0), opt("INVITED", "Invited", "sky", 1),
   opt("WARM", "Warm", "yellow", 2), opt("DRAFTED", "Drafted", "purple", 3),
-  opt("SENT", "Sent", "blue", 4), opt("REPLIED", "Replied", "green", 5),
-  opt("CLOSED", "Closed", "red", 6)].join(",")}]`;
+  opt("SENT", "Sent", "blue", 4), opt("APPLIED", "Applied", "turquoise", 5),
+  opt("REPLIED", "Replied", "green", 6), opt("INTERVIEWING", "Interviewing", "orange", 7),
+  opt("OFFER", "Offer", "green", 8), opt("STOPPED", "Stopped", "gray", 9),
+  opt("CLOSED", "Closed", "red", 10)].join(",")}]`;
+
+// Click-not-type rejection reasons (multi-select) — 15-feedback reads these.
+const FEEDBACK_OPTIONS = `[${[
+  opt("TOO_SENIOR", "Too senior", "orange", 0), opt("WRONG_ROLE", "Wrong role type", "red", 1),
+  opt("WRONG_DOMAIN", "Wrong domain", "purple", 2), opt("WRONG_LOCATION", "Location/geo", "sky", 3),
+  opt("AGENCY_STAFFING", "Agency / staffing", "yellow", 4), opt("COMP_TOO_LOW", "Comp too low", "pink", 5),
+  opt("COMPANY_DEAD", "Company inactive", "gray", 6), opt("NOT_A_FIT", "Not a fit (gut)", "blue", 7),
+  opt("OTHER", "Other (see note)", "turquoise", 8)].join(",")}]`;
 
 const objects = await gql("metadata",
   `query { objects(paging:{first:100}) { edges { node { id nameSingular isActive } } } }`);
@@ -115,7 +133,8 @@ MODEL.jobPortal = [
   { name: "kind", label: "Kind", type: "SELECT", options: `[${[
     opt("ATS_API", "ATS API", "blue", 0), opt("FEED", "Feed", "green", 1),
     opt("AGGREGATOR_API", "Aggregator API", "sky", 2), opt("VC_BOARD", "VC Board", "purple", 3),
-    opt("FUNDING_RSS", "Funding RSS", "yellow", 4), opt("SCRAPE", "Scrape", "orange", 5)].join(",")}]` },
+    opt("FUNDING_RSS", "Funding RSS", "yellow", 4), opt("SCRAPE", "Scrape", "orange", 5),
+    opt("COMPANY_BOARD", "Company Board", "turquoise", 6)].join(",")}]` },
   { name: "status", label: "Status", type: "SELECT", options: `[${[
     opt("ACTIVE", "Active", "green", 0), opt("PLANNED", "Planned", "yellow", 1),
     opt("LATER", "Later", "gray", 2)].join(",")}]` },
@@ -126,7 +145,8 @@ MODEL.jobPortal = [
 MODEL.investorPortfolio = [
   { name: "actor", label: "Actor", type: "TEXT" },
   { name: "kind", label: "Kind", type: "SELECT", options: `[${[
-    opt("ACCELERATOR", "Accelerator", "purple", 0), opt("VC", "VC", "blue", 1)].join(",")}]` },
+    opt("ACCELERATOR", "Accelerator", "purple", 0), opt("VC", "VC", "blue", 1),
+    opt("DIRECTORY", "Directory", "green", 2)].join(",")}]` },
   { name: "portfolioUrl", label: "Portfolio URL", type: "LINKS" },
   { name: "jobsBoardUrl", label: "Jobs Board URL", type: "LINKS" },
   { name: "scrapeStatus", label: "Scrape Status", type: "SELECT", options: `[${[
@@ -135,6 +155,24 @@ MODEL.investorPortfolio = [
   { name: "companiesInCrm", label: "Companies In CRM", type: "NUMBER", description: "how many of those were pushed as CRM Companies" },
   { name: "notes", label: "Notes", type: "TEXT" },
 ];
+
+// Structured feedback (multi-select) + the 3-touch outreach ladder fields.
+MODEL.company!.push(
+  { name: "feedbackReason", label: "Feedback Reason", type: "MULTI_SELECT", options: FEEDBACK_OPTIONS,
+    description: "click why this company is irrelevant — 15-feedback learns from it" });
+MODEL.opportunity!.push(
+  { name: "feedbackReason", label: "Feedback Reason", type: "MULTI_SELECT", options: FEEDBACK_OPTIONS,
+    description: "click why this role is irrelevant — the judge learns from it" },
+  { name: "touches", label: "Touches", type: "NUMBER", description: "outreach messages sent (max 3, then auto-STOPPED)" },
+  { name: "interviewAt", label: "Interview At", type: "DATE_TIME", description: "next interview — set it and 8-followups makes a prep task" });
+MODEL.person!.push(
+  { name: "outreachStage", label: "Outreach Stage", type: "SELECT", options: `[${[
+    opt("QUEUED", "Queued", "gray", 0), opt("CONNECTED", "Connected", "sky", 1),
+    opt("TOUCH_1", "Touch 1", "blue", 2), opt("TOUCH_2", "Touch 2", "purple", 3),
+    opt("TOUCH_3", "Touch 3", "yellow", 4), opt("REPLIED", "Replied", "green", 5),
+    opt("STOPPED", "Stopped", "red", 6)].join(",")}]` },
+  { name: "lastTouchAt", label: "Last Touch At", type: "DATE_TIME" },
+  { name: "nextFollowUpAt", label: "Next Follow-up At", type: "DATE_TIME" });
 
 for (const [obj, fields] of Object.entries(MODEL)) {
   const id = objId[obj];
@@ -199,6 +237,25 @@ try {
   console.log(`warn  relation company→investorPortfolio failed: ${String(err).slice(0, 300)}`);
 }
 
+// Keep SELECT options of existing fields in sync with the MODEL above
+// (createOneField only runs for missing fields — new options need an update).
+for (const [obj, fieldName] of [["jobPortal", "kind"], ["investorPortfolio", "kind"]] as const) {
+  try {
+    const spec = MODEL[obj]!.find((f) => f.name === fieldName)!;
+    const fields = await gql("metadata",
+      `query { object(id:"${objId[obj]}") { fields(paging:{first:200}) { edges { node { id name options } } } } }`);
+    const f = fields.object.fields.edges.find((e: any) => e.node.name === fieldName)?.node;
+    if (!f) continue;
+    const wanted = (spec.options!.match(/value:"([A-Z_]+)"/g) ?? []).length;
+    if ((f.options?.length ?? 0) >= wanted) { console.log(`ok    ${obj}.${fieldName} options up to date`); continue; }
+    await gql("metadata",
+      `mutation { updateOneField(input:{id:"${f.id}", update:{options:${spec.options}}}) { id } }`);
+    console.log(`+++   ${obj}.${fieldName} options refreshed`);
+  } catch (err) {
+    console.log(`warn  could not refresh ${obj}.${fieldName} options: ${String(err).slice(0, 150)}`);
+  }
+}
+
 // Deactivate what the five-object model doesn't use (reversible in Settings →
 // Data model). Objects: notes are unused; tasks stay (6-emails/8-followups
 // create them). Fields: sales-CRM leftovers on our repurposed objects.
@@ -220,14 +277,17 @@ for (const [obj, fieldName] of DEACTIVATE_FIELDS) {
     console.log(`warn  could not deactivate ${obj}.${fieldName}: ${String(err).slice(0, 150)}`);
   }
 }
-try {
-  if (objId.note) {
+// note: unused. workflow/dashboard: Twenty features this pipeline doesn't use —
+// deactivating tidies the sidebar down to the five-object model (+ Tasks, API Usage).
+for (const objName of ["note", "workflow", "dashboard"]) {
+  try {
+    if (!objId[objName]) continue;
     await gql("metadata",
-      `mutation { updateOneObject(input:{id:"${objId.note}", update:{isActive:false}}) { id } }`);
-    console.log("---   object note deactivated (unused)");
+      `mutation { updateOneObject(input:{id:"${objId[objName]}", update:{isActive:false}}) { id } }`);
+    console.log(`---   object ${objName} deactivated (unused)`);
+  } catch (err) {
+    console.log(`warn  could not deactivate ${objName} object: ${String(err).slice(0, 150)}`);
   }
-} catch (err) {
-  console.log(`warn  could not deactivate note object: ${String(err).slice(0, 150)}`);
 }
 
 // Repoint the opportunity kanban stages at our outreach states.

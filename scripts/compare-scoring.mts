@@ -1,7 +1,8 @@
 // Three-judge comparison on ALREADY-STORED jobs (no fetching):
 // deterministic rubric vs free OpenCode model vs claude -p.
 process.chdir(new URL("..", import.meta.url).pathname);
-process.loadEnvFile(".env");
+const { loadEnv } = await import("../src/env.ts");
+loadEnv();
 process.env.LLM_LIGHT ??= "opencode run -m opencode/mimo-v2.5-free";
 const { openDb } = await import("../src/db.ts");
 const { extract } = await import("../src/llm.ts");

@@ -90,6 +90,56 @@ export const weworkremotely: JobSource = {
   },
 };
 
+// Working Nomads exposes its live board as a plain JSON array — no key, no
+// paging params (the endpoint returns the current window, ~45 jobs). Every
+// listing is 100% remote by definition of the site, so remote is always true.
+export const workingnomads: JobSource = {
+  name: "workingnomads",
+  async fetchPostings() {
+    const d = await getJson("https://www.workingnomads.com/api/exposed_jobs/");
+    if (!Array.isArray(d)) return [];
+    return d.filter((j: any) => j?.title && j?.url).map((j: any): Posting => ({
+      source: "workingnomads",
+      company: j.company_name || "?",
+      title: j.title,
+      url: j.url,
+      location: j.location || "remote", // e.g. "WORLDWIDE", "USA Only"
+      remote: true,
+      posted_at: j.pub_date,
+      description: stripHtml(j.description),
+    }));
+  },
+};
+
+// Jobspresso runs WP Job Manager: its job_feed accepts posts_per_page (the
+// WordPress name — per_page/showposts are ignored and silently give 10).
+// Company and location are packed into one dc:creator field as
+// "Company<br>⚲&nbsp;Location".
+export const jobspresso: JobSource = {
+  name: "jobspresso",
+  async fetchPostings() {
+    const n = Number(process.env.JOBSPRESSO_POSTS ?? 100);
+    const xml = await getText(`https://jobspresso.co/?feed=job_feed&posts_per_page=${n}`);
+    if (!xml) return [];
+    const feed = await new Parser().parseString(xml);
+    return (feed.items ?? []).flatMap((i: any): Posting[] => {
+      if (!i.link || !i.title) return [];
+      const [companyRaw, locRaw] = String(i.creator ?? "").split(/<br\s*\/?>/i);
+      const location = stripHtml(locRaw).replace(/^[⚲\s ]+/, "").trim();
+      return [{
+        source: "jobspresso",
+        company: stripHtml(companyRaw).trim() || "?",
+        title: i.title.trim(),
+        url: i.link,
+        location: location || "remote",
+        remote: true, // Jobspresso is a remote-only board
+        posted_at: i.isoDate,
+        description: stripHtml(i["content:encoded"] ?? i.content ?? i.contentSnippet),
+      }];
+    });
+  },
+};
+
 // HN "Who is hiring" — find the latest monthly thread, parse top-level comments.
 // Convention: first line is "Company | Role | Location | ...".
 export const hnWhoIsHiring: JobSource = {

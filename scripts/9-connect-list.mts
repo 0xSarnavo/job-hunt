@@ -8,7 +8,8 @@ import { writeFileSync } from "node:fs";
 import { openDb } from "../src/db.ts";
 
 process.chdir(new URL("..", import.meta.url).pathname);
-try { process.loadEnvFile(".env"); } catch {}
+import { loadEnv } from "../src/env.ts";
+loadEnv();
 const db = openDb();
 
 const companies = db.prepare(`
@@ -22,12 +23,12 @@ for (const c of companies)
 
 for (const c of companies) {
   const people = db.prepare(
-    "SELECT name, title, persona_tier, linkedin FROM people WHERE lower(company)=lower(?) ORDER BY CASE persona_tier WHEN 'founder' THEN 0 WHEN 'hiring_manager' THEN 1 ELSE 2 END",
+    "SELECT name, title, persona_tier, linkedin, last_active, active_source FROM people WHERE lower(company)=lower(?) ORDER BY CASE WHEN last_active IS NOT NULL THEN 0 ELSE 1 END, CASE persona_tier WHEN 'founder' THEN 0 WHEN 'hiring_manager' THEN 1 ELSE 2 END",
   ).all(c.name) as any[];
   md += `\n## ${c.name} — ${c.funding ?? ""} (${c.headcount ?? "?"} people, via ${c.source ?? "?"})\n\n`;
   if (!people.length) { md += `_no people found yet — run 5-people.mts_\n`; continue; }
-  md += `| person | title | tier | linkedin |\n|---|---|---|---|\n`;
-  for (const p of people) md += `| ${p.name} | ${p.title} | ${p.persona_tier} | ${p.linkedin} |\n`;
+  md += `| person | title | tier | active | linkedin |\n|---|---|---|---|---|\n`;
+  for (const p of people) md += `| ${p.name} | ${p.title} | ${p.persona_tier} | ${p.last_active ?? "unchecked"} | ${p.linkedin} |\n`;
 }
 
 writeFileSync("data/connect-list.md", md);

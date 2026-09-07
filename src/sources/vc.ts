@@ -43,13 +43,32 @@ function tinyfishFetch(url: string): { text: string; links: string[] } {
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
+// Job Portal records YOU added in the CRM (kind = VC Board, status = Active,
+// with a Portal URL) are fetched too — one page each, no search queries.
+async function crmBoards(): Promise<{ board: string; urls: (q: string[]) => string[] }[]> {
+  const U = process.env.TWENTY_URL, K = process.env.TWENTY_API_KEY;
+  if (!U || !K) return [];
+  try {
+    const res = await fetch(`${U}/rest/jobPortals?limit=100`, {
+      headers: { Authorization: `Bearer ${K}` }, signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) return [];
+    const portals = ((await res.json()) as any)?.data?.jobPortals ?? [];
+    const builtin = new Set(["vc:yc", "vc:a16z"]);
+    return portals
+      .filter((p: any) => p.kind === "VC_BOARD" && p.status === "ACTIVE"
+        && p.portalUrl?.primaryLinkUrl && !builtin.has(p.sourceSlug))
+      .map((p: any) => ({ board: `custom:${slug(p.name)}`, urls: () => [p.portalUrl.primaryLinkUrl] }));
+  } catch { return []; }
+}
+
 export function makeVcSource(db?: Database.Database): JobSource {
   return {
     name: "vc-boards",
     async fetchPostings(profile: Profile) {
       const nQueries = Number(process.env.VC_QUERIES ?? 4);
       const out: Posting[] = [];
-      for (const b of BOARDS) {
+      for (const b of [...BOARDS, ...(await crmBoards())]) {
         for (const url of b.urls(profile.role_titles.slice(0, nQueries))) {
           let page;
           try { page = tinyfishFetch(url); } catch { continue; }

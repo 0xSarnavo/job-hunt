@@ -31,9 +31,9 @@ export async function getJson(url: string, timeoutMs = 20_000): Promise<any | nu
   return null;
 }
 
-export async function getText(url: string): Promise<string | null> {
+export async function getText(url: string, timeoutMs = 20_000): Promise<string | null> {
   try {
-    const res = await get(url);
+    const res = await get(url, timeoutMs);
     if (!res.ok) return null;
     return await res.text();
   } catch {

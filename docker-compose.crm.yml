@@ -2,6 +2,9 @@
 #   docker compose -f docker-compose.crm.yml up -d     # start
 #   docker compose -f docker-compose.crm.yml down      # stop (data persists in volumes)
 # Secrets come from .env (TWENTY_APP_SECRET).
+# Explicit project name: volumes must NOT be tied to the checkout
+# directory name, or moving/renaming the folder orphans the CRM data.
+name: jobhunt-crm
 services:
   crm-server:
     image: twentycrm/twenty:latest

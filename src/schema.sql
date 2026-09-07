@@ -38,7 +38,9 @@ CREATE TABLE IF NOT EXISTS people (
   linkedin     TEXT,
   email        TEXT,
   email_status TEXT,             -- valid|risky|invalid|unverified
-  provenance   TEXT              -- JSON: per-field {source, confidence, observed_at}
+  provenance   TEXT,             -- JSON: per-field {source, confidence, observed_at}
+  last_active  TEXT,             -- last LinkedIn post/activity date (ISO), NULL = unchecked
+  active_source TEXT              -- free-signal|fiber-posts|fiber-live|manual, NULL = unchecked
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_people_unique ON people(lower(company), lower(name));
@@ -66,6 +68,7 @@ CREATE TABLE IF NOT EXISTS portfolio_companies (
   program     TEXT NOT NULL,     -- registry slug: yc | a16z | ...
   name        TEXT NOT NULL,
   domain      TEXT,
+  slug        TEXT,              -- yc directory slug (ycombinator.com/companies/<slug>) for founder lookup
   batch       TEXT,              -- e.g. "Fall 2026" (YC); investment stage tags for VCs
   status      TEXT,              -- Active | Acquired | Inactive | Exits | ...
   url         TEXT,              -- company website

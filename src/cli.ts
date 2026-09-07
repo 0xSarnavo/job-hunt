@@ -18,15 +18,19 @@ import { ingest, reportRun } from "./ingest.ts";
 import { score } from "./score.ts";
 import { resolve } from "./resolver.ts";
 import { fetchBoard, type AtsKind } from "./sources/ats.ts";
-import { remotive, remoteok, arbeitnow, weworkremotely, hnWhoIsHiring } from "./sources/feeds.ts";
+import { remotive, remoteok, arbeitnow, weworkremotely, hnWhoIsHiring, workingnomads, jobspresso } from "./sources/feeds.ts";
 import { adzuna, jooble } from "./sources/apis.ts";
+import { cutshort, weekday } from "./sources/boards.ts";
 import { syncToCrm } from "./sync.ts";
 import type { JobSource } from "./sources/source.ts";
 
-import { loadEnv } from "./env.ts";
+import { loadEnv, setEnvVar } from "./env.ts";
 loadEnv();
 
-const SOURCES: JobSource[] = [remotive, remoteok, arbeitnow, weworkremotely, hnWhoIsHiring, adzuna, jooble];
+const SOURCES: JobSource[] = [
+  remotive, remoteok, arbeitnow, weworkremotely, hnWhoIsHiring, adzuna, jooble,
+  workingnomads, jobspresso, cutshort, weekday,
+];
 
 const runScript = (script: string, env: Record<string, string> = {}) =>
   spawnSync("npx", ["tsx", script], { stdio: "inherit", env: { ...process.env, ...env } });
@@ -358,6 +362,81 @@ async function runAdd(what?: string): Promise<void> {
   else await runAddPerson();
 }
 
+// ---------- llm ----------
+// Picks the command behind a tier and writes it to .env as LLM_LIGHT/LLM_HEAVY,
+// which llm.ts splits on spaces and runs with the prompt as the last argument.
+// Nothing here is hardcoded to a vendor: we list what is actually installed,
+// ask that CLI for its own model list, and only offer effort where the CLI
+// takes an effort flag.
+
+const CLIS: { bin: string; label: string; models: () => string[]; effortFlag?: string }[] = [
+  {
+    bin: "opencode",
+    label: "opencode (OpenCode Zen — free tiers, needs `opencode auth login`)",
+    // Cold cache goes to the network and can take minutes; warm is ~2s.
+    models: () => {
+      const r = spawnSync("opencode", ["models"], { encoding: "utf8", timeout: 180_000 });
+      return (r.stdout ?? "").split("\n").map((s) => s.trim()).filter(Boolean);
+    },
+    effortFlag: "--variant", // provider-specific: minimal | low | medium | high | xhigh | max
+  },
+  {
+    bin: "claude",
+    label: "claude (existing subscription, no per-call cost)",
+    // The CLI has no list command; these are the aliases `--model` accepts.
+    models: () => ["opus", "sonnet", "haiku"],
+  },
+];
+
+const EFFORTS = ["(none)", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+async function pickFrom(rl: readline.Interface, label: string, opts: string[]): Promise<string | null> {
+  console.log(`\n${label}`);
+  opts.forEach((o, i) => console.log(`  ${i + 1}) ${o}`));
+  const pick = Number((await rl.question(`pick [1-${opts.length}]: `)).trim());
+  return pick >= 1 && pick <= opts.length ? opts[pick - 1]! : null;
+}
+
+async function runLlm(): Promise<void> {
+  const installed = CLIS.filter((c) => spawnSync("which", [c.bin], { encoding: "utf8" }).status === 0);
+  if (!installed.length) {
+    console.log("no supported LLM CLI found on PATH (looked for: " + CLIS.map((c) => c.bin).join(", ") + ")");
+    return;
+  }
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const tier = await pickFrom(rl, "which tier?", [
+      "light  — bulk extraction (job/careers pages). Wants cheap and fast.",
+      "heavy  — judgement (hiring-manager inference, draft personalisation).",
+    ]);
+    if (!tier) return console.log("nothing picked.");
+    const key = tier.startsWith("light") ? "LLM_LIGHT" : "LLM_HEAVY";
+
+    const cliLabel = await pickFrom(rl, "which CLI?", installed.map((c) => c.label));
+    if (!cliLabel) return console.log("nothing picked.");
+    const cli = installed.find((c) => c.label === cliLabel)!;
+
+    console.log(`\nasking ${cli.bin} for its models (first run can be slow)…`);
+    const models = cli.models();
+    if (!models.length) return console.log(`${cli.bin} returned no models — is it authenticated?`);
+    const model = await pickFrom(rl, "which model?", models);
+    if (!model) return console.log("nothing picked.");
+
+    let effort: string | null = null;
+    if (cli.effortFlag) {
+      effort = await pickFrom(rl, `reasoning effort (${cli.effortFlag})?`, EFFORTS);
+      if (effort === "(none)") effort = null;
+    }
+
+    const cmd = cli.bin === "opencode"
+      ? ["opencode", "run", "-m", model, ...(effort ? [cli.effortFlag!, effort] : [])]
+      : ["claude", "-p", "--model", model];
+    setEnvVar(key, cmd.join(" "));
+    console.log(`\n  ✓ .env ${key}="${cmd.join(" ")}"`);
+    console.log("    used by the next run; override for one run with an inline env var.");
+  } finally { rl.close(); }
+}
+
 // ---------- menu ----------
 async function menu(): Promise<void> {
   console.log(`
@@ -369,9 +448,10 @@ job-hunt — what do you want to do?
   4) people   find more people to reach
   5) status   what's stored, what's in the CRM, what's pending
   6) add      log something manually: a connection or a role you found
+  7) llm      choose which LLM CLI, model and effort each tier uses
 `);
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const pick = (await rl.question("pick [1-6]: ")).trim();
+  const pick = (await rl.question("pick [1-7]: ")).trim();
   rl.close();
   const map: Record<string, () => Promise<void> | void> = {
     "1": runSetup, "2": async () => { await runCheck(); },
@@ -379,6 +459,7 @@ job-hunt — what do you want to do?
     "4": () => { runScript("scripts/5-people.mts", { PEOPLE_PER_RUN: "20" }); },
     "5": runStatus,
     "6": () => runAdd(),
+    "7": runLlm,
   };
   if (map[pick]) await map[pick]!();
   else console.log("nothing picked — bye.");
@@ -396,6 +477,7 @@ program.command("people").description("find people to reach (Fiber first, free)"
   .option("--max <n>", "companies this run", "20")
   .action((opts: { max: string }) => { runScript("scripts/5-people.mts", { PEOPLE_PER_RUN: opts.max }); });
 program.command("status").description("local + CRM counts and pending work").action(runStatus);
+program.command("llm").description("choose the LLM CLI, model and effort per tier (writes .env)").action(runLlm);
 program.command("add [what]").description("log a connection or a role by hand: `add person` / `add role` (guided)")
   .action(async (what?: string) => { await runAdd(what); });
 

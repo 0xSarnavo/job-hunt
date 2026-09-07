@@ -67,10 +67,10 @@ console.log(`portals: ${PORTALS.length} seeded/updated`);
 
 // ---------- 2. scrape portfolio member lists ----------
 const upsert = db.prepare(`
-  INSERT INTO portfolio_companies (program, name, domain, batch, status, url, one_liner)
-  VALUES (@program, @name, @domain, @batch, @status, @url, @one_liner)
+  INSERT INTO portfolio_companies (program, name, domain, slug, batch, status, url, one_liner)
+  VALUES (@program, @name, @domain, @slug, @batch, @status, @url, @one_liner)
   ON CONFLICT(program, name) DO UPDATE SET
-    domain=excluded.domain, batch=excluded.batch, status=excluded.status,
+    domain=excluded.domain, slug=COALESCE(excluded.slug, slug), batch=excluded.batch, status=excluded.status,
     url=excluded.url, one_liner=excluded.one_liner`);
 
 // YC — the whole directory, every batch, from the yc-oss mirror (free JSON).
@@ -80,6 +80,7 @@ try {
   const tx = db.transaction((rows: any[]) => { for (const r of rows) upsert.run(r); });
   tx(all.map((c) => ({
     program: "yc", name: c.name ?? "?", domain: domainOf(c.website),
+    slug: c.slug ?? null,
     batch: c.batch ?? null, status: c.status ?? null, url: c.website ?? null,
     one_liner: c.one_liner?.slice(0, 300) ?? null,
   })));
@@ -124,6 +125,7 @@ try {
   const list = (v: unknown) => Array.isArray(v) ? v.join("/") : typeof v === "string" ? v : "";
   tx(companies.map((c) => ({
     program: "a16z", name: c.name ?? c.post_title ?? "?", domain: domainOf(c.company_url || c.url),
+    slug: null,
     batch: list(c.stages) || null,
     status: c.status ?? c.tag ?? null, url: c.company_url || c.url || null,
     one_liner: [list(c.focus_areas).replaceAll("/", ", "), c.description?.slice(0, 200)].filter(Boolean).join(" · ") || null,
@@ -163,6 +165,7 @@ try {
   const tx = db.transaction((rows: any[]) => { for (const r of rows) upsert.run(r); });
   tx(startups.map((c) => ({
     program: "blr-map", name: c.name, domain: domainOf(c.website),
+    slug: null,
     batch: c.stage || null, status: "Active", url: c.website || null,
     one_liner: [c.sector, c.tagline?.slice(0, 150), c.area].filter(Boolean).join(" · ") || null,
   })));
@@ -234,6 +237,7 @@ for (const up of userPortfolios) {
     const tx = db.transaction((rows: any[]) => { for (const r of rows) upsert.run(r); });
     tx(parsed.companies.map((c) => ({
       program: up.slug, name: c.name, domain: domainOf(c.website),
+      slug: null,
       batch: null, status: "Active", url: c.website ?? null, one_liner: null,
     })));
     console.log(`${up.name} (CRM-added): ${parsed.companies.length} companies extracted`);

@@ -53,6 +53,11 @@ const MODEL: Record<string, FieldSpec[]> = {
     { name: "emailProvenance", label: "Email Provenance", type: "TEXT", description: "vendor + confidence, e.g. prospeo:82 verified 2026-09-01" },
     { name: "linkedinNote", label: "LinkedIn Note", type: "TEXT", description: "drafted connect note, ≤300 chars (LinkedIn's cap)" },
     { name: "dmDraft", label: "DM Draft", type: "TEXT", description: "≤150-word message for after they accept" },
+    { name: "linkedinActive", label: "LinkedIn Active", type: "SELECT", options: `[${[
+      opt("ACTIVE", "Active", "green", 0), opt("DORMANT", "Dormant", "yellow", 1),
+      opt("UNKNOWN", "Unknown", "gray", 2)].join(",")}]`, description: "posted recently (5b-active fills this; UNKNOWN = unchecked)" },
+    { name: "lastActive", label: "Last Active", type: "DATE_TIME", description: "last LinkedIn post/activity date" },
+    { name: "activeSource", label: "Active Source", type: "TEXT", description: "free-signal|fiber-posts|fiber-live|manual" },
     { name: "fetchEmail", label: "Fetch Email", type: "SELECT", options: `[${[
       opt("NO", "No", "gray", 0), opt("YES", "Yes — fetch", "blue", 1),
       opt("DONE", "Done", "green", 2), opt("FAILED", "Failed", "red", 3)].join(",")}]` },

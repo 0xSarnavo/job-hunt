@@ -11,7 +11,9 @@
     "cli": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/*.test.ts",
-    "setup-crm": "tsx src/setup-crm.ts"
+    "setup-crm": "tsx src/setup-crm.ts",
+    "crm-up": "docker compose -f docker-compose.crm.yml up -d",
+    "crm-down": "docker compose -f docker-compose.crm.yml down"
   },
   "dependencies": {
     "better-sqlite3": "^12.2.0",

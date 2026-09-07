@@ -9,13 +9,23 @@ Clone it and run your own hunt. Your profile, CV, and all results stay local and
 
 ## Quickstart
 
+Three installs first, all free: [git](https://git-scm.com/downloads),
+[Node.js](https://nodejs.org) 20+, and [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+(runs the CRM on your machine). Then:
+
 ```bash
 git clone https://github.com/0xSarnavo/job-hunt && cd job-hunt
 npm install && npm link          # makes `jobhunt` available everywhere
 cp .env.example .env             # add the keys you have; a missing key only disables its step
+npm run crm-up                   # your CRM, on your machine: http://localhost:3010
 jobhunt setup                    # reads your CV, drafts profile.yaml, asks the rest
 jobhunt daily                    # then this, once a day
+bash scripts/install-daily.sh    # ...or run this once and never think about it again
 ```
+
+First visit to http://localhost:3010: create an account (that's a login for your own
+private CRM, not a signup anywhere), then Settings → APIs → generate a key → paste it
+into `.env` as `TWENTY_API_KEY`, and run `npm run setup-crm` once to build the data model.
 
 `jobhunt` alone shows a menu. The verbs:
 
@@ -72,17 +82,37 @@ Script numbers are build order, not run order. `scripts/run-daily.sh` runs them 
 | 3 | `14-backfill` | walks 2 years of funding archives, one bounded chunk per day |
 | 4 | `11-vc-companies` | newest YC batches → pitch targets |
 | 5 | `12-portfolios` | investor programs + their member companies → CRM |
-| 6 | `13-careers` | detects each portfolio company's ATS; re-scans known boards weekly |
-| 7 | `2-llm-score` | free-model judge on new matches |
-| 8 | `3-cv-briefs` | CV-tailoring brief per double-passed job → `data/cv-briefs/` |
-| 9 | `4-sync` | matched jobs → CRM kanban |
-| 10 | `5-people` | people per company: Fiber profiles first, web search fallback |
-| 11 | `6-emails` | email waterfall, only for people you marked `Fetch Email = YES` |
-| 12 | `8-followups` | drafts follow-ups for stale SENT cards |
-| 13 | `9-connect-list` | regenerates `data/connect-list.md` |
-| 14 | `10-usage-sync` | per-vendor API usage counters → CRM |
+| 6 | `16-crm-pull` | absorbs records you added in the CRM by hand |
+| 7 | `13-careers` | detects each portfolio company's ATS; re-scans known boards weekly |
+| 8 | `15-feedback` | pulls your irrelevant-marks so the judge learns your taste |
+| 9 | `2-llm-score` | free-model judge on new matches |
+| 10 | `3-cv-briefs` | CV-tailoring brief per double-passed job → `data/cv-briefs/` |
+| 11 | `4-sync` | matched jobs → CRM kanban |
+| 12 | `5-people` | people per company: Fiber profiles first, web search fallback |
+| 13 | `6-emails` | email waterfall, only for people you marked `Fetch Email = YES` |
+| 14 | `8-followups` | drafts follow-ups for stale SENT cards |
+| 15 | `9-connect-list` | regenerates `data/connect-list.md` |
+| 16 | `10-usage-sync` | per-vendor API usage counters → CRM |
 
+The run ends with a CRM database backup (`data/crm-backup-Mon.sql.gz` … `Sun`, a rolling week).
 Any step that stops at a cap or quota writes what's left, and why, to `data/PENDING.md`.
+
+### Set-and-forget
+
+`bash scripts/install-daily.sh` schedules the pipeline on macOS (prints the cron line on
+Linux). Not a fixed hour: it runs once per day, the first time your machine is awake after
+8 AM — open the laptop at 11, it runs by 11:30. The wrapper (`scripts/daily-if-due.sh`)
+handles the failure cases so you don't have to:
+
+- If Docker isn't running, the script starts it and waits.
+- If one source is down, the other steps still run; failures are listed at the end of
+  `data/daily-cron.log`.
+- A step that hangs is killed at its time cap instead of blocking the day.
+- If 4+ steps fail (network down, machine slept mid-run), the day stays unstamped and the
+  whole run retries on the next half-hour tick — at most 3 attempts per day.
+
+Everything is incremental and safe to re-run: a retried or manual `jobhunt daily` picks up
+where the last one stopped instead of duplicating work.
 
 ### It gets faster on its own
 
@@ -95,7 +125,23 @@ is mostly quick re-scans of the newest data.
 
 ## The CRM
 
-`npm run setup-crm` builds five objects (plus an API-usage tracker) in a self-hosted Twenty:
+The pipeline's front end is [Twenty](https://twenty.com), an open-source CRM you host
+yourself. `docker-compose.crm.yml` runs it on your machine:
+
+```bash
+npm run crm-up      # start — http://localhost:3010, ready in ~30s
+npm run crm-down    # stop — all data survives in docker volumes
+```
+
+You log in once; the session is configured to last years. Start it when you want to look,
+stop it when you don't — the daily run starts it by itself when needed.
+
+Hosting it in the cloud (Railway, a VPS) works too — set `TWENTY_URL` to your instance —
+but for one person checking a dashboard it's paying for a server that idles 23 hours a day,
+and it puts your job-search data on someone else's machine. Local costs nothing. If you do
+host it: put it behind HTTPS, use a strong password, and treat the API key like a password.
+
+`npm run setup-crm` builds five objects (plus an API-usage tracker) in that Twenty:
 
 ```mermaid
 erDiagram
@@ -144,6 +190,35 @@ The CRM is an input too, not only a mirror:
   people get a persona tier, roles get scored. `jobhunt add` does the same from the terminal
   with a guided form.
 
+## Make it yours
+
+- **Your roles, locations, dealbreakers** live in `profile.yaml` — `jobhunt setup` writes
+  it by interviewing you, or edit it directly. The rule score and the LLM judge both read
+  it, so changing it re-aims the whole pipeline.
+- **A specific page you want watched** (a company's careers page, a VC's job board, a
+  portfolio list): add it in the CRM as a Job Portal or Investor Portfolio with a URL —
+  see "The CRM is an input too" above. No code needed for most pages.
+- **A site that needs a real parser** gets one in `src/registry.ts` +
+  `scripts/12-portfolios.mts`; copy the YC or a16z block and change the URL and selectors.
+- **Batch sizes, caps, models**: every script opens with a Knobs block, overridable from
+  `.env` (list at the bottom of this file).
+
+## Security
+
+- **What stays on your machine**: your profile, CV, the SQLite DB, the CRM and its
+  database, every draft, every backup. All of it is gitignored — a `git push` of this
+  repo can't leak it.
+- **What leaves your machine**: job-board queries and company-name lookups go to the APIs
+  you gave keys for (that's what the keys are for). Postings and public profile data come
+  back. Your CV never goes to any vendor; only the LLM CLI you configured reads it.
+- **`.env` is the one file to protect** — it holds every key. It's gitignored; keep it
+  out of screenshots and pastebins. Any key can be revoked and reissued at its vendor if
+  it leaks.
+- **Nothing sends itself.** Emails become Gmail drafts, connect notes become a list.
+  A bug in this pipeline can waste API quota; it cannot message a founder as you.
+- **The CRM login** is your own instance's account, stored in your own database — it
+  exists so the API needs a key, not because anyone else can see the data.
+
 ## What's free, what's optional
 
 Everything degrades instead of failing:
@@ -162,7 +237,8 @@ Everything degrades instead of failing:
 ```
 docs/         PLAN.md (the spec) · SOURCES.md (every source + status) · TOOLING.md (tool choices)
 src/          shared library: db, llm, scoring, resolver, sources/, CRM setup & sync, registry
-scripts/      numbered pipeline steps + run-daily.sh
+scripts/      numbered pipeline steps + run-daily.sh, daily-if-due.sh, install-daily.sh
+docker-compose.crm.yml   the CRM stack (Twenty + Postgres + Redis), `npm run crm-up`
 data/         generated & personal, all gitignored: jobhunt.db, cv-briefs/, email-drafts/,
               connect-list.md, portfolio-companies.md, PENDING.md, LINKS.md
 profile.yaml  your profile (gitignored) — written by `jobhunt setup`
